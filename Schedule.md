@@ -39,64 +39,78 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
    **Log (append-only):**
    - 2026-08-01: Added Vitest unit/property and Chrome component projects, Playwright Chrome E2E, and shared fixtures. `npm run test:all` passes.
 
-8. **[TODO] Define the normalized document model**
+8. **[DONE] Define the normalized document model**
    **Acceptance:** Model stable node IDs, kind-neutral and inferred/imported containers, source primitive input, semantic JSON values, formatting overrides, ordered child IDs, and ordered keyed entries without exposing container kinds to UI components.
    **Log (append-only):**
+   - 2026-08-01: Added normalized primitive/container records, stable IDs, ordered keyed entries, additive metadata, UI-safe node views, and a persistent bucketed node table.
 
-9. **[TODO] Implement identity, parent lookup, and document invariants**
+9. **[DONE] Implement identity, parent lookup, and document invariants**
    **Acceptance:** Generate stable IDs and validate unique IDs, one root, valid parent/child relationships, ordered children, legal scalar/container states, and cycle absence.
    **Log (append-only):**
+   - 2026-08-01: Added Web Crypto UUID generation, linear parent lookup, graph and shape validation, cycle detection, and runtime primitive-state checks.
 
-10. **[TODO] Implement strict JSON import parsing**
+10. **[DONE] Implement strict JSON import parsing**
     **Acceptance:** Parse valid JSON into normalized nodes while preserving object order. Reject JSON5, comments, trailing commas, malformed input, excessive resource use, and duplicate object keys with typed errors.
     **Log (append-only):**
+    - 2026-08-01: Added a duplicate-aware recursive-descent parser with typed syntax locations and early input, depth, node, and string resource guards.
 
-11. **[TODO] Implement canonical JSON materialization and serialization**
+11. **[DONE] Implement canonical JSON materialization and serialization**
     **Acceptance:** Convert normalized documents to standard JSON and deterministic serialized text without leaking editor metadata. The blank root and provisional one-primitive state follow the approved inference contract.
     **Log (append-only):**
+    - 2026-08-01: Added deterministic materialization and serialization that preserve object order, strict JSON semantics, neutral roots, and imported scalar roots.
 
-12. **[TODO] Implement primitive type detection**
+12. **[DONE] Implement primitive type detection**
     **Acceptance:** Pure, versioned functions detect strings, numbers, booleans, `null`, and approved unambiguous date-like strings while preserving source input and treating ambiguous input as a string.
     **Log (append-only):**
+    - 2026-08-01: Added versioned detection for JSON primitives and validated ISO dates/datetimes while preserving ambiguous and imported string values.
 
-13. **[TODO] Implement additive primitive formatting**
+13. **[DONE] Implement additive primitive formatting**
     **Acceptance:** Pure formatters produce spreadsheet-inspired string, number, boolean, null, and date presentations. Formatting never alters source input and supports global and per-value overrides.
     **Log (append-only):**
+    - 2026-08-01: Added source-preserving spreadsheet-style number, boolean, null, date, and datetime formatting with global and per-node overrides.
 
-14. **[TODO] Implement container inference transitions**
+14. **[DONE] Implement container inference transitions**
     **Acceptance:** Encode the approved action-sequence table as pure transitions for blank, provisional, ordered, and keyed shapes. Conflicting actions convert losslessly or return a typed error.
     **Log (append-only):**
+    - 2026-08-01: Implemented lossless insert, wrap, unwrap, paste-into, and paste-beside transitions, including persistent ordered mixed shapes and exact restoration snapshots.
 
-15. **[TODO] Define versioned commands and domain events**
+15. **[DONE] Define versioned commands and domain events**
     **Acceptance:** Define serializable user-intent commands, minimal versioned mutation events, deterministic metadata for tests, and typed validation failures. Ephemeral UI signals remain outside the domain log.
     **Log (append-only):**
+    - 2026-08-01: Added serializable V1 semantic commands, minimal normalized patch events, deterministic injected metadata, inversion, and typed failures.
 
-16. **[TODO] Implement the structurally shared document reducer**
+16. **[DONE] Implement the structurally shared document reducer**
     **Acceptance:** Apply every domain event as a pure function, update only affected normalized records, preserve invariants, and avoid deep cloning, serialization comparisons, or whole-document traversal for leaf edits.
     **Log (append-only):**
+    - 2026-08-01: Added pure patch reduction over persistent buckets, O(1)-sized leaf patches, stale/unsupported event rejection, and structural invariant validation.
 
-17. **[TODO] Implement command validation and event production**
+17. **[DONE] Implement command validation and event production**
     **Acceptance:** Commands validate targets and current revision, then emit complete event transactions without mutating state or containing UI notifications.
     **Log (append-only):**
+    - 2026-08-01: Added revision, payload, target, collision, caption, parse, and no-op validation with injected IDs and minimal event production.
 
-18. **[TODO] Implement event inversion, transactions, and replay**
+18. **[DONE] Implement event inversion, transactions, and replay**
     **Acceptance:** Every document mutation can be undone and redone exactly. Text edits group at commit or an idle boundary, event replay reproduces state, and periodic snapshots can bound long replay histories.
     **Log (append-only):**
+    - 2026-08-01: Added exact inverse transactions, monotonic applied revisions, grouped edit boundaries, bounded checkpoints, and deterministic retained-history replay. Item 22 will drive idle-time boundary closure.
 
-19. **[TODO] Implement the external document store**
+19. **[DONE] Implement the external document store**
     **Acceptance:** Provide `present`, `past`, `future`, `revision`, bounded event-log support, and URL-saved revision through a small store compatible with `useSyncExternalStore`.
     **Log (append-only):**
+    - 2026-08-01: Added stable external-store snapshots, safe subscriptions, undo/redo, past/future history, bounded applied-event logs, checkpoints, and URL-saved revision state.
 
-20. **[TODO] Implement focused document selectors**
+20. **[DONE] Implement focused document selectors**
     **Acceptance:** Provide stable selectors for individual nodes, paths, children, formatting, selection targets, and the flat visible-item projection without forcing unrelated component updates.
     **Log (append-only):**
+    - 2026-08-01: Added stable node, child, parent, path, formatting, selection, and visible-item selectors with structural-token memoization.
 
-21. **[TODO] Verify the document core**
+21. **[DONE] Verify the document core**
     **Acceptance:** Unit and property tests cover parsing, materialization, primitive detection, formatting, all inference sequences, invariants, structural sharing, inversion, replay equivalence, and invalid commands.
     **Log (append-only):**
+    - 2026-08-01: Added 56 unit/property tests covering strict parsing, inference, invariants, events, structural sharing, replay, store behavior, selectors, and malformed input. Full suite has 57 passing tests.
 
 22. **[TODO] Define transient interaction machines**
-    **Acceptance:** Use xState only where finite workflows clarify editing, context menus, import/export, and URL decoding. Focus, hover, and other ephemeral state do not enter document undo history.
+    **Acceptance:** Use xState only where finite workflows clarify editing, text-edit idle boundaries, context menus, import/export, and URL decoding. Focus, hover, and other ephemeral state do not enter document undo history.
     **Log (append-only):**
 
 23. **[TODO] Render the blank root JSON Header**
