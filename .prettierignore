@@ -1,0 +1,7 @@
+node_modules/
+dist/
+playwright-report/
+test-results/
+package-lock.json
+JSON-Viewer-Plan-Feedback-V1.md
+JSON-Viewer-Prompt.md

@@ -1,0 +1,104 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-mono:
+    'IBM Plex Mono', 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+  --text-editor: 0.875rem;
+  --text-editor--line-height: 1.5;
+  --text-status: 0.75rem;
+  --text-status--line-height: 1.25;
+  --font-weight-editor: 400;
+  --font-weight-emphasis: 600;
+  --spacing-editor-gutter: 1.25rem;
+  --spacing-row-inline: 0.75rem;
+  --spacing-row-block: 0.5rem;
+  --color-canvas: #252722;
+  --color-surface: #30332c;
+  --color-surface-raised: #3a3d35;
+  --color-border: #55594d;
+  --color-text: #ddd8c8;
+  --color-text-muted: #98998e;
+  --color-focus: #d0b782;
+  --color-selection: #57665a;
+  --color-string: #b8c99d;
+  --color-number: #d5a97b;
+  --color-boolean: #a7b7d2;
+  --color-null: #b7a8bd;
+  --color-date: #d0bf91;
+  --color-error: #d68f84;
+}
+
+:root {
+  font-family: var(--font-mono);
+  font-size: var(--text-editor);
+  font-weight: var(--font-weight-editor);
+  line-height: var(--text-editor--line-height);
+  color: var(--color-text);
+  background: var(--color-canvas);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 20rem;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  isolation: isolate;
+  display: grid;
+  min-height: 100vh;
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: var(--color-canvas);
+}
+
+.editor-canvas {
+  min-width: 0;
+  padding: clamp(var(--spacing-row-block), 2vw, var(--spacing-editor-gutter));
+}
+
+.status-bar {
+  display: flex;
+  min-height: 1.75rem;
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  padding-inline: var(--spacing-row-inline);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  font-size: var(--text-status);
+  line-height: var(--text-status--line-height);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -4,33 +4,40 @@
 
 The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code merely exists; its acceptance criteria and relevant automated checks must pass.
 
-1. **[TODO] Specify the container inference contract**
+1. **[DONE] Specify the container inference contract**
    **Acceptance:** Document and approve the resulting strict JSON, visible layout, focus destination, and inverse event for one primitive, several primitives, named headers, repeated named headers, mixed content, shape conversion, and pasted arrays/objects. Every transition is deterministic and lossless.
    **Log (append-only):**
+   - 2026-08-01: Locked V1 rules in `docs/container-inference-v1.md`, including mixed-content wrappers, intermediate conversions, paste modes, focus, and exact inverse requirements.
 
-2. **[TODO] Scaffold the Vite React application**
+2. **[DONE] Scaffold the Vite React application**
    **Acceptance:** Create an npm-managed React and TypeScript Vite application that starts locally and produces a production build without SSR or backend code.
    **Log (append-only):**
+   - 2026-08-01: Added the npm/Vite React client scaffold. Verified the static production build with Vite 8 on Node 24.
 
-3. **[TODO] Configure TypeScript and project quality tools**
+3. **[DONE] Configure TypeScript and project quality tools**
    **Acceptance:** Enable strict TypeScript settings, linting, formatting, and consistent npm scripts for development, type checking, linting, testing, and building.
    **Log (append-only):**
+   - 2026-08-01: Configured strict TypeScript 6, ESLint 10 flat config, Prettier, and development, verification, and build scripts.
 
-4. **[TODO] Install the minimal application dependencies**
+4. **[DONE] Install the minimal application dependencies**
    **Acceptance:** Add React, Tailwind CSS, Base UI primitives, xState v5, and test tooling. Do not add MobX, WASM, virtualization, or other deferred dependencies.
    **Log (append-only):**
+   - 2026-08-01: Installed React 19, Tailwind 4, Base UI 1, xState 5, and test tooling with a clean npm audit. Deferred packages remain absent.
 
-5. **[TODO] Create the domain-driven source hierarchy**
+5. **[DONE] Create the domain-driven source hierarchy**
    **Acceptance:** Establish the `app`, `domain/document`, `domain/commands`, `domain/events`, `domain/reducer`, `domain/operations`, `infrastructure`, `state`, `interaction`, `components/tree`, `components/menus`, `components/layout`, `styles`, and `test` boundaries with enforceable dependency direction.
    **Log (append-only):**
+   - 2026-08-01: Created all planned source boundaries and added layer-specific import restrictions for domain, infrastructure, state, interaction, and reusable components.
 
-6. **[TODO] Establish the visual tokens and minimal application shell**
+6. **[DONE] Establish the visual tokens and minimal application shell**
    **Acceptance:** Define the muted pastel and earthy palette, typography, spacing, focus, selection, and primitive-format tokens in Tailwind. Render a restrained full-viewport editor shell with no banners or explanatory marketing content.
    **Log (append-only):**
+   - 2026-08-01: Added Tailwind theme tokens, reduced-motion and focus foundations, an isolated full-viewport editor canvas, and compact status bar.
 
-7. **[TODO] Establish automated test infrastructure**
+7. **[DONE] Establish automated test infrastructure**
    **Acceptance:** Configure unit, property, component, and latest-Chrome browser tests with shared fixtures. Tests run through documented npm scripts.
    **Log (append-only):**
+   - 2026-08-01: Added Vitest unit/property and Chrome component projects, Playwright Chrome E2E, and shared fixtures. `npm run test:all` passes.
 
 8. **[TODO] Define the normalized document model**
    **Acceptance:** Model stable node IDs, kind-neutral and inferred/imported containers, source primitive input, semantic JSON values, formatting overrides, ordered child IDs, and ordered keyed entries without exposing container kinds to UI components.
