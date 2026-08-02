@@ -43,3 +43,38 @@ test('remains usable at 240 CSS pixels without horizontal overflow', async ({
   )
   expect(widths.scroll).toBe(widths.client)
 })
+
+test('completes a selection clipboard menu and palette workflow', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/')
+  const root = page.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  const composer = page.getByRole('textbox', { name: 'Add value' })
+  for (const value of [' first ', ' second ']) {
+    await composer.fill(value)
+    await composer.press('Enter')
+  }
+  const values = page.getByRole('treeitem', { name: 'string value' })
+  await values.nth(0).click()
+  await values.nth(1).click({ modifiers: ['Control'] })
+  await expect(values.nth(0)).toHaveAttribute('aria-selected', 'true')
+  await expect(values.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('Control+C')
+
+  await root.focus()
+  await page.keyboard.press('Control+V')
+  await expect(
+    page.getByRole('contentinfo', { name: 'Editor status' }),
+  ).toContainText('Pasted JSON')
+
+  await values.nth(0).click({ button: 'right' })
+  await expect(page.getByRole('menuitem', { name: 'Trim text' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Control+Shift+P')
+  await page.getByRole('textbox', { name: 'Search commands' }).fill('trim')
+  await page.getByRole('option', { name: 'Trim text' }).click()
+  await expect(page.getByText('first', { exact: true }).first()).toBeVisible()
+})

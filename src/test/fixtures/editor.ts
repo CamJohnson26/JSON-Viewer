@@ -14,5 +14,8 @@ export function createEditorTestStore(): DocumentStore {
       eventId: `event-${sequence}`,
       occurredAt: '2026-08-01T00:00:00.000Z',
     }),
+    createUuid: () =>
+      `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
+    createTimestamp: () => '2026-08-01T00:00:00.000Z',
   })
 }

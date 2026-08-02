@@ -8,6 +8,7 @@ import {
   pasteBeside,
   pasteInto,
   unwrapHeader,
+  validateDocument,
   wrapNode,
   type ContainerNode,
   type DocumentNode,
@@ -25,6 +26,12 @@ import {
   type EventTransaction,
   type NodeRecordPatch,
 } from '../events/index.ts'
+import {
+  applyJsonOperation,
+  type JsonOperation,
+  type OperationError,
+  type OperationErrorCode,
+} from '../operations/index.ts'
 
 export const COMMAND_VERSION = 1 as const
 
@@ -91,6 +98,16 @@ export type DocumentCommand =
       readonly targetId: NodeId
       readonly source: string
     })
+  | (CommandBase & {
+      readonly type: 'json.pasteReplace'
+      readonly targetId: NodeId
+      readonly source: string
+    })
+  | (CommandBase & {
+      readonly type: 'operation.apply'
+      readonly selectedIds: readonly NodeId[]
+      readonly operation: JsonOperation
+    })
 
 export type CommandFailureCode =
   | 'UnsupportedVersion'
@@ -103,11 +120,13 @@ export type CommandFailureCode =
   | 'NothingToInsert'
   | 'IdCollision'
   | 'InvalidJson'
+  | OperationErrorCode
 
 export interface CommandFailure {
   readonly code: CommandFailureCode
   readonly message: string
   readonly parseError?: ParseError
+  readonly operationError?: OperationError
 }
 
 export type CommandResult =
@@ -116,6 +135,7 @@ export type CommandResult =
       readonly status: 'applied'
       readonly transaction: EventTransaction
       readonly focusId: NodeId
+      readonly selectedIds?: readonly NodeId[]
     }
   | { readonly ok: true; readonly status: 'noop'; readonly transaction: null }
   | { readonly ok: false; readonly error: CommandFailure }
@@ -123,6 +143,8 @@ export type CommandResult =
 export interface CommandContext {
   readonly createId: NodeIdFactory
   readonly createEventMetadata: () => EventMetadata
+  readonly createUuid?: () => string
+  readonly createTimestamp?: () => string
 }
 
 export function compileCommand(
@@ -248,9 +270,154 @@ export function compileCommand(
           : pasteBeside(document, command.targetId, parsed.document)
       return transitionResult(document, result, context)
     }
+    case 'json.pasteReplace':
+      return replaceWithJson(document, command, context)
+    case 'operation.apply':
+      return applyOperation(document, command, context)
     default:
       return failure('InvalidTarget', 'Unsupported command type')
   }
+}
+
+function replaceWithJson(
+  document: JsonDocument,
+  command: Extract<DocumentCommand, { type: 'json.pasteReplace' }>,
+  context: CommandContext,
+): CommandResult {
+  if (!validNodeId(command.targetId) || typeof command.source !== 'string')
+    return failure('InvalidPayload', 'JSON replacement payload is invalid')
+  const target = document.nodes[command.targetId]
+  if (!target)
+    return failure('UnknownTarget', `Unknown target: ${command.targetId}`)
+
+  let collision: NodeId | undefined
+  const allocated = new Set<NodeId>()
+  const parsed = parseJson(command.source, {}, () => {
+    const id = context.createId()
+    if (!validNodeId(id) || document.nodes[id] || allocated.has(id))
+      collision = id
+    allocated.add(id)
+    return id
+  })
+  if (collision !== undefined)
+    return failure(
+      'IdCollision',
+      `Node ID already exists or was reused: ${collision}`,
+    )
+  if (!parsed.ok) return parseFailure(parsed.error)
+
+  const parsedRoot = parsed.document.nodes[
+    parsed.document.rootId
+  ] as ContainerNode
+  const caption =
+    command.targetId === document.rootId || target.type === 'primitive'
+      ? null
+      : target.caption
+  const sourceRootId =
+    command.targetId !== document.rootId &&
+    caption === null &&
+    parsedRoot.kind === 'scalar'
+      ? (parsedRoot.childIds[0] as NodeId)
+      : parsed.document.rootId
+  const replacements: NodeRecordPatch[] = []
+  const addParsed = (id: NodeId): void => {
+    const node = parsed.document.nodes[id] as DocumentNode
+    if (node.type === 'container') node.childIds.forEach(addParsed)
+    const replacementId = id === sourceRootId ? command.targetId : id
+    const after: DocumentNode =
+      node.type === 'primitive'
+        ? { ...node, id: replacementId }
+        : {
+            ...node,
+            id: replacementId,
+            caption: id === sourceRootId ? caption : node.caption,
+            kind:
+              id === sourceRootId && caption !== null && node.kind === 'scalar'
+                ? 'array'
+                : node.kind,
+            kindOrigin:
+              id === sourceRootId && caption !== null && node.kind === 'scalar'
+                ? 'inferred'
+                : node.kindOrigin,
+            childIds: node.childIds.map((childId) =>
+              childId === sourceRootId ? command.targetId : childId,
+            ),
+            entries: node.entries.map((entry) => ({
+              ...entry,
+              nodeId:
+                entry.nodeId === sourceRootId ? command.targetId : entry.nodeId,
+            })),
+          }
+    replacements.push({
+      id: replacementId,
+      before: document.nodes[replacementId] ?? null,
+      after,
+    })
+  }
+  addParsed(sourceRootId)
+
+  const removed = new Set<NodeId>()
+  const collectRemoved = (id: NodeId): void => {
+    const node = document.nodes[id]
+    if (node?.type !== 'container') return
+    node.childIds.forEach((childId) => {
+      removed.add(childId)
+      collectRemoved(childId)
+    })
+  }
+  collectRemoved(command.targetId)
+  for (const id of removed)
+    replacements.push({
+      id,
+      before: document.nodes[id] as DocumentNode,
+      after: null,
+    })
+
+  const after: JsonDocument = {
+    rootId: document.rootId,
+    nodes: patchNodeTable(
+      document.nodes,
+      replacements.map(({ id, after: node }) => ({ id, after: node })),
+    ),
+  }
+  const violations = validateDocument(after)
+  if (violations.length > 0) {
+    const duplicate = violations.find(({ code }) => code === 'DuplicateKey')
+    return failure(
+      duplicate ? 'DuplicateCaption' : 'InvalidTarget',
+      violations.map(({ message }) => message).join('; '),
+    )
+  }
+  return applied(document, after, command.targetId, context)
+}
+
+function applyOperation(
+  document: JsonDocument,
+  command: Extract<DocumentCommand, { type: 'operation.apply' }>,
+  context: CommandContext,
+): CommandResult {
+  const unavailable = (name: string) => (): never => {
+    throw new Error(`${name} generation is unavailable`)
+  }
+  const result = applyJsonOperation(
+    document,
+    command.selectedIds,
+    command.operation,
+    {
+      createId: context.createId,
+      createUuid: context.createUuid ?? unavailable('UUID'),
+      createTimestamp: context.createTimestamp ?? unavailable('Timestamp'),
+    },
+  )
+  if (!result.ok) return operationFailure(result.error)
+  if (result.document === document) return noop()
+  return applied(
+    document,
+    result.document,
+    result.selectedIds[0] ?? result.document.rootId,
+    context,
+    result.selectedIds,
+  )
 }
 
 function updatePrimitive(
@@ -596,22 +763,25 @@ function applied(
   after: JsonDocument,
   focusId: NodeId,
   context: CommandContext,
+  selectedIds?: readonly NodeId[],
 ): CommandResult {
   const event = createPatchEvent(before, after, context.createEventMetadata())
   if (event.records.length === 0 && event.rootId.before === event.rootId.after)
     return noop()
-  return eventResult(event, focusId)
+  return eventResult(event, focusId, selectedIds)
 }
 
 function eventResult(
   event: EventTransaction['events'][number],
   focusId: NodeId,
+  selectedIds?: readonly NodeId[],
 ): CommandResult {
   return {
     ok: true,
     status: 'applied',
     transaction: { version: DOMAIN_EVENT_VERSION, events: [event] },
     focusId,
+    ...(selectedIds === undefined ? {} : { selectedIds }),
   }
 }
 
@@ -635,6 +805,13 @@ function parseFailure(error: ParseError): CommandResult {
   return {
     ok: false,
     error: { code: 'InvalidJson', message: error.message, parseError: error },
+  }
+}
+
+function operationFailure(error: OperationError): CommandResult {
+  return {
+    ok: false,
+    error: { code: error.code, message: error.message, operationError: error },
   }
 }
 

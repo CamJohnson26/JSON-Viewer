@@ -12,6 +12,8 @@ export interface EditSession {
 
 export interface EditorInteractionContext {
   readonly activeNodeId: NodeId
+  readonly selectedNodeIds: readonly NodeId[]
+  readonly anchorNodeId: NodeId | null
   readonly expandedContainerIds: readonly NodeId[]
   readonly formattingEnabled: boolean
   readonly edit: EditSession | null
@@ -23,6 +25,24 @@ export interface EditorInteractionInput {
 
 export type EditorInteractionEvent =
   | { readonly type: 'focus'; readonly nodeId: NodeId }
+  | { readonly type: 'focus.only'; readonly nodeId: NodeId }
+  | { readonly type: 'selection.toggle'; readonly nodeId: NodeId }
+  | {
+      readonly type: 'selection.set'
+      readonly nodeIds: readonly NodeId[]
+      readonly anchorNodeId: NodeId | null
+    }
+  | {
+      readonly type: 'selection.range'
+      readonly siblingNodeIds: readonly NodeId[]
+      readonly targetId: NodeId
+    }
+  | {
+      readonly type: 'selection.prune'
+      readonly deletedNodeIds: readonly NodeId[]
+      readonly fallbackNodeId?: NodeId
+    }
+  | { readonly type: 'selection.all'; readonly nodeIds: readonly NodeId[] }
   | { readonly type: 'expansion.toggle'; readonly containerId: NodeId }
   | {
       readonly type: 'expansion.set'
@@ -46,6 +66,56 @@ export type EditHistoryBoundaryEvent = Extract<
   { readonly type: 'editing.finish' | 'editing.idle' }
 >
 
+function uniqueNodeIds(nodeIds: readonly NodeId[]): readonly NodeId[] {
+  return [...new Set(nodeIds)]
+}
+
+type SelectionPruneEvent = Extract<
+  EditorInteractionEvent,
+  { readonly type: 'selection.prune' }
+>
+
+function pruneDeletedNodes(
+  context: EditorInteractionContext,
+  event: SelectionPruneEvent,
+): Partial<EditorInteractionContext> {
+  const deletedNodeIds = new Set(event.deletedNodeIds)
+  const fallbackNodeId =
+    event.fallbackNodeId !== undefined &&
+    !deletedNodeIds.has(event.fallbackNodeId)
+      ? event.fallbackNodeId
+      : undefined
+  let selectedNodeIds = context.selectedNodeIds.filter(
+    (nodeId) => !deletedNodeIds.has(nodeId),
+  )
+  const selectsFallback =
+    selectedNodeIds.length === 0 && fallbackNodeId !== undefined
+
+  if (selectsFallback) {
+    selectedNodeIds = [fallbackNodeId]
+  }
+
+  return {
+    selectedNodeIds,
+    anchorNodeId:
+      context.anchorNodeId !== null && !deletedNodeIds.has(context.anchorNodeId)
+        ? context.anchorNodeId
+        : selectsFallback
+          ? fallbackNodeId
+          : null,
+    activeNodeId: deletedNodeIds.has(context.activeNodeId)
+      ? (fallbackNodeId ?? selectedNodeIds[0] ?? context.activeNodeId)
+      : context.activeNodeId,
+    expandedContainerIds: context.expandedContainerIds.filter(
+      (containerId) => !deletedNodeIds.has(containerId),
+    ),
+    edit:
+      context.edit !== null && deletedNodeIds.has(context.edit.targetId)
+        ? null
+        : context.edit,
+  }
+}
+
 export const editorInteractionMachine = setup({
   types: {
     context: {} as EditorInteractionContext,
@@ -56,6 +126,8 @@ export const editorInteractionMachine = setup({
   id: 'editorInteraction',
   context: ({ input }) => ({
     activeNodeId: input.rootId,
+    selectedNodeIds: [input.rootId],
+    anchorNodeId: input.rootId,
     expandedContainerIds: [],
     formattingEnabled: true,
     edit: null,
@@ -65,6 +137,88 @@ export const editorInteractionMachine = setup({
     focus: {
       actions: assign({
         activeNodeId: ({ event }) => event.nodeId,
+        selectedNodeIds: ({ event }) => [event.nodeId],
+        anchorNodeId: ({ event }) => event.nodeId,
+      }),
+    },
+    'focus.only': {
+      actions: assign({
+        activeNodeId: ({ event }) => event.nodeId,
+      }),
+    },
+    'selection.set': {
+      actions: assign({
+        selectedNodeIds: ({ event }) => [...event.nodeIds],
+        anchorNodeId: ({ event }) => event.anchorNodeId,
+      }),
+    },
+    'selection.toggle': {
+      // Additive deselection intentionally leaves focus and anchor on the toggled node.
+      actions: assign({
+        activeNodeId: ({ event }) => event.nodeId,
+        selectedNodeIds: ({ context, event }) =>
+          context.selectedNodeIds.includes(event.nodeId)
+            ? context.selectedNodeIds.filter(
+                (nodeId) => nodeId !== event.nodeId,
+              )
+            : [...context.selectedNodeIds, event.nodeId],
+        anchorNodeId: ({ event }) => event.nodeId,
+      }),
+    },
+    'selection.range': {
+      actions: assign(({ context, event }) => {
+        const siblingNodeIds = uniqueNodeIds(event.siblingNodeIds)
+        const targetIndex = siblingNodeIds.indexOf(event.targetId)
+        const anchorIndex =
+          context.anchorNodeId === null
+            ? -1
+            : siblingNodeIds.indexOf(context.anchorNodeId)
+
+        if (targetIndex === -1 || anchorIndex === -1) {
+          return {
+            activeNodeId: event.targetId,
+            selectedNodeIds: [event.targetId],
+            anchorNodeId: event.targetId,
+          }
+        }
+
+        return {
+          activeNodeId: event.targetId,
+          selectedNodeIds: siblingNodeIds.slice(
+            Math.min(anchorIndex, targetIndex),
+            Math.max(anchorIndex, targetIndex) + 1,
+          ),
+        }
+      }),
+    },
+    'selection.prune': [
+      {
+        guard: ({ context, event }) =>
+          context.edit !== null &&
+          event.deletedNodeIds.includes(context.edit.targetId),
+        target: '#editorInteraction.idle',
+        actions: assign(({ context, event }) =>
+          pruneDeletedNodes(context, event),
+        ),
+      },
+      {
+        actions: assign(({ context, event }) =>
+          pruneDeletedNodes(context, event),
+        ),
+      },
+    ],
+    'selection.all': {
+      actions: assign(({ context, event }) => {
+        const selectedNodeIds = uniqueNodeIds(event.nodeIds)
+        const activeNodeId = selectedNodeIds.includes(context.activeNodeId)
+          ? context.activeNodeId
+          : (selectedNodeIds[0] ?? context.activeNodeId)
+
+        return {
+          selectedNodeIds,
+          activeNodeId,
+          anchorNodeId: selectedNodeIds.length === 0 ? null : activeNodeId,
+        }
       }),
     },
     'expansion.toggle': {
@@ -105,6 +259,8 @@ export const editorInteractionMachine = setup({
           target: 'editing',
           actions: assign({
             activeNodeId: ({ event }) => event.targetId,
+            selectedNodeIds: ({ event }) => [event.targetId],
+            anchorNodeId: ({ event }) => event.targetId,
             edit: ({ event }) => ({
               kind: event.kind,
               targetId: event.targetId,
@@ -119,6 +275,8 @@ export const editorInteractionMachine = setup({
         'editing.begin': {
           actions: assign({
             activeNodeId: ({ event }) => event.targetId,
+            selectedNodeIds: ({ event }) => [event.targetId],
+            anchorNodeId: ({ event }) => event.targetId,
             edit: ({ event }) => ({
               kind: event.kind,
               targetId: event.targetId,
@@ -157,6 +315,18 @@ export const selectActiveNodeId = (
   snapshot: EditorInteractionSnapshot,
 ): NodeId => snapshot.context.activeNodeId
 
+export const selectSelectedNodeIds = (
+  snapshot: EditorInteractionSnapshot,
+): readonly NodeId[] => snapshot.context.selectedNodeIds
+
+export const selectSelectedNodeCount = (
+  snapshot: EditorInteractionSnapshot,
+): number => snapshot.context.selectedNodeIds.length
+
+export const selectSelectionAnchorNodeId = (
+  snapshot: EditorInteractionSnapshot,
+): NodeId | null => snapshot.context.anchorNodeId
+
 export const selectExpandedContainerIds = (
   snapshot: EditorInteractionSnapshot,
 ): readonly NodeId[] => snapshot.context.expandedContainerIds
@@ -177,6 +347,13 @@ export function selectIsExpanded(
   containerId: NodeId,
 ): boolean {
   return snapshot.context.expandedContainerIds.includes(containerId)
+}
+
+export function selectIsSelected(
+  snapshot: EditorInteractionSnapshot,
+  nodeId: NodeId,
+): boolean {
+  return snapshot.context.selectedNodeIds.includes(nodeId)
 }
 
 export function isEditHistoryBoundaryEvent(

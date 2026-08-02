@@ -3,9 +3,13 @@ import type { EventMetadata } from '../domain/events/index.ts'
 
 export const createNodeId: NodeIdFactory = () => nodeId(crypto.randomUUID())
 
+export const createUuid = (): string => crypto.randomUUID()
+
+export const createTimestamp = (): string => new Date().toISOString()
+
 export function createEventMetadata(): EventMetadata {
   return {
-    eventId: crypto.randomUUID(),
-    occurredAt: new Date().toISOString(),
+    eventId: createUuid(),
+    occurredAt: createTimestamp(),
   }
 }

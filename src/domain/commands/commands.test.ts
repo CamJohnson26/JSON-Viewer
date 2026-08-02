@@ -12,6 +12,7 @@ import {
   type NodeId,
 } from '../document/index.ts'
 import { invertTransaction } from '../events/index.ts'
+import { JSON_OPERATION_VERSION } from '../operations/index.ts'
 import { applyTransaction } from '../reducer/index.ts'
 import {
   COMMAND_VERSION,
@@ -175,6 +176,126 @@ describe('semantic command compilation', () => {
 
     expect(serialize(into)).toBe('{"a":1,"b":2}')
     expect(materialize(beside)).toEqual([{ a: 1 }, [3], { b: 2 }])
+  })
+
+  test.each([
+    ['[1,9]', 0, '2', [2, 9]],
+    ['[1,9]', 0, '{"nested":[2]}', [{ nested: [2] }, 9]],
+    ['{"key":1,"keep":9}', 0, '2', { key: 2, keep: 9 }],
+    ['{"key":1,"keep":9}', 0, '[2,3]', { key: [2, 3], keep: 9 }],
+  ] as const)(
+    'replaces target JSON in %s while retaining target identity',
+    (documentSource, targetIndex, replacementSource, expected) => {
+      const document = fixture(documentSource)
+      const root = getContainer(document, document.rootId)
+      const targetId = root.childIds[targetIndex] as NodeId
+      const unaffectedId = root.childIds[1] as NodeId
+      const unaffected = document.nodes[unaffectedId]
+      const result = compileCommand(
+        document,
+        0,
+        command({
+          type: 'json.pasteReplace',
+          targetId,
+          source: replacementSource,
+        }),
+        context('replace'),
+      )
+      if (!result.ok || result.status !== 'applied')
+        throw new Error('Expected replacement event')
+      const replaced = applyTransaction(document, result.transaction)
+
+      expect(result.focusId).toBe(targetId)
+      expect(result.transaction.events).toHaveLength(1)
+      expect(materialize(replaced)).toEqual(expected)
+      expect(replaced.nodes[targetId]).toBeDefined()
+      expect(replaced.nodes[unaffectedId]).toBe(unaffected)
+      expect(
+        applyTransaction(replaced, invertTransaction(result.transaction)),
+      ).toEqual(document)
+      expect(applyTransaction(document, result.transaction)).toEqual(replaced)
+      assertDocument(replaced)
+    },
+  )
+
+  test.each([
+    ['{"replacement":true}', { replacement: true }],
+    ['3', 3],
+  ] as const)(
+    'replaces the document root with %s while retaining the editor root ID',
+    (source, expected) => {
+      const document = fixture('{"old":[1,2]}')
+      const result = compileCommand(
+        document,
+        0,
+        command({
+          type: 'json.pasteReplace',
+          targetId: document.rootId,
+          source,
+        }),
+        context('root-replace'),
+      )
+      if (!result.ok || result.status !== 'applied')
+        throw new Error('Expected root replacement event')
+      const replaced = applyTransaction(document, result.transaction)
+
+      expect(replaced.rootId).toBe(document.rootId)
+      expect(result.focusId).toBe(document.rootId)
+      expect(materialize(replaced)).toEqual(expected)
+      expect(
+        applyTransaction(replaced, invertTransaction(result.transaction)),
+      ).toEqual(document)
+      assertDocument(replaced)
+    },
+  )
+
+  test('rejects invalid replacement input, targets, duplicate keys, and ID collisions atomically', () => {
+    const document = fixture('[1,2]')
+    const targetId = getContainer(document, document.rootId)
+      .childIds[0] as NodeId
+    const invalidCases: readonly [DocumentCommand, CommandContext, string][] = [
+      [
+        command({
+          type: 'json.pasteReplace',
+          targetId,
+          source: '{bad}',
+        }),
+        context(),
+        'InvalidJson',
+      ],
+      [
+        command({
+          type: 'json.pasteReplace',
+          targetId,
+          source: '{"a":1,"a":2}',
+        }),
+        context(),
+        'InvalidJson',
+      ],
+      [
+        command({
+          type: 'json.pasteReplace',
+          targetId: nodeId('missing'),
+          source: '1',
+        }),
+        context(),
+        'UnknownTarget',
+      ],
+      [
+        command({ type: 'json.pasteReplace', targetId, source: '[3]' }),
+        {
+          ...context(),
+          createId: () => document.rootId,
+        },
+        'IdCollision',
+      ],
+    ]
+
+    for (const [value, commandContext, code] of invalidCases) {
+      const result = compileCommand(document, 0, value, commandContext)
+      expect(result).toMatchObject({ ok: false, error: { code } })
+      expect(materialize(document)).toEqual([1, 2])
+    }
   })
 
   test('preserves paste-beside ordering when a pasted header is renamed', () => {
@@ -622,6 +743,172 @@ describe('semantic command compilation', () => {
       context('wrap'),
     )
     expect(wrapped).toMatchObject({ focusId: nodeId('wrap-0') })
+  })
+
+  test.each([
+    [
+      '[1,2]',
+      (document: JsonDocument) => [document.rootId],
+      { type: 'structure.reverse' },
+      [2, 1],
+    ],
+    [
+      '[" value ",0]',
+      (document: JsonDocument) => [
+        getContainer(document, document.rootId).childIds[0] as NodeId,
+      ],
+      { type: 'text.trim' },
+      ['value', 0],
+    ],
+    [
+      '[false,0]',
+      (document: JsonDocument) => [
+        getContainer(document, document.rootId).childIds[0] as NodeId,
+      ],
+      { type: 'primitive.toggle' },
+      [true, 0],
+    ],
+    [
+      '[1,1,2]',
+      (document: JsonDocument) => [document.rootId],
+      { type: 'collection.deduplicate' },
+      [1, 2],
+    ],
+    [
+      '{"before":1,"keep":2}',
+      (document: JsonDocument) => [document.rootId],
+      { type: 'data.rename-path', path: ['before'], replacement: 'after' },
+      { after: 1, keep: 2 },
+    ],
+  ] as const)(
+    'compiles %s operation into one serializable, invertible transaction',
+    (source, select, input, expected) => {
+      const document = fixture(source)
+      const selectedIds = select(document)
+      const value = command({
+        type: 'operation.apply',
+        selectedIds,
+        operation: {
+          ...input,
+          version: JSON_OPERATION_VERSION,
+        },
+      })
+      const result = compileCommand(document, 0, value, context('operation'))
+      if (!result.ok || result.status !== 'applied')
+        throw new Error('Expected operation event')
+      const updated = applyTransaction(document, result.transaction)
+
+      expect(result.transaction.events).toHaveLength(1)
+      expect(result.selectedIds).toEqual(selectedIds)
+      expect(result.focusId).toBe(selectedIds[0])
+      expect(materialize(updated)).toEqual(expected)
+      expect(
+        applyTransaction(updated, invertTransaction(result.transaction)),
+      ).toEqual(document)
+      expect(JSON.parse(JSON.stringify(value))).toEqual(value)
+      expect(JSON.parse(JSON.stringify(result.transaction))).toEqual(
+        result.transaction,
+      )
+    },
+  )
+
+  test('validates operation revisions and emits no event on failure or no-op', () => {
+    const document = fixture('["clean",1]')
+    const children = getContainer(document, document.rootId).childIds
+    const text = children[0] as NodeId
+    const number = children[1] as NodeId
+    const operation = (selectedIds: readonly NodeId[], type: 'text.trim') =>
+      command({
+        type: 'operation.apply',
+        selectedIds,
+        operation: { version: JSON_OPERATION_VERSION, type },
+      })
+    const stale = {
+      ...operation([text], 'text.trim'),
+      expectedRevision: 1,
+    }
+    expect(compileCommand(document, 0, stale, context())).toMatchObject({
+      ok: false,
+      error: { code: 'RevisionMismatch' },
+    })
+    expect(
+      compileCommand(document, 0, operation([number], 'text.trim'), context()),
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: 'IncompatibleSelection',
+        operationError: { code: 'IncompatibleSelection', nodeId: number },
+      },
+    })
+    expect(
+      compileCommand(document, 0, operation([text], 'text.trim'), context()),
+    ).toEqual({ ok: true, status: 'noop', transaction: null })
+    expect(materialize(document)).toEqual(['clean', 1])
+  })
+
+  test.each([
+    ['uuid', 'injected-uuid'],
+    ['timestamp', '2026-08-01T12:34:56.000Z'],
+  ] as const)('uses the injected %s generator', (value, generated) => {
+    const document = fixture('["",0]')
+    const children = getContainer(document, document.rootId).childIds
+    const targetId = children[0] as NodeId
+    const untouchedId = children[1] as NodeId
+    const result = compileCommand(
+      document,
+      0,
+      command({
+        type: 'operation.apply',
+        selectedIds: [targetId],
+        operation: {
+          version: JSON_OPERATION_VERSION,
+          type: 'primitive.generate',
+          value,
+        },
+      }),
+      {
+        ...context('generate'),
+        createUuid: () => 'injected-uuid',
+        createTimestamp: () => '2026-08-01T12:34:56.000Z',
+      },
+    )
+    if (!result.ok || result.status !== 'applied')
+      throw new Error('Expected generated operation')
+    const updated = applyTransaction(document, result.transaction)
+
+    expect(materialize(updated)).toEqual([generated, 0])
+    expect(updated.nodes[untouchedId]).toBe(document.nodes[untouchedId])
+    expect(updated.nodes[document.rootId]).toBe(document.nodes[document.rootId])
+  })
+
+  test('returns a typed failure when a requested generator is unavailable', () => {
+    const document = fixture('[""]')
+    const targetId = getContainer(document, document.rootId)
+      .childIds[0] as NodeId
+    const result = compileCommand(
+      document,
+      0,
+      command({
+        type: 'operation.apply',
+        selectedIds: [targetId],
+        operation: {
+          version: JSON_OPERATION_VERSION,
+          type: 'primitive.generate',
+          value: 'uuid',
+        },
+      }),
+      context(),
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'InvalidOperation',
+        operationError: { code: 'InvalidOperation' },
+      },
+    })
+    if (!result.ok) expect(result.error.message).toContain('unavailable')
+    expect(materialize(document)).toEqual([''])
   })
 })
 

@@ -15,6 +15,8 @@ function createProductionStore(): DocumentStore {
   return createDocumentStore(createBlankDocument(rootId), {
     createId: createNodeId,
     createEventMetadata,
+    createUuid: () => crypto.randomUUID(),
+    createTimestamp: () => new Date().toISOString(),
   })
 }
 

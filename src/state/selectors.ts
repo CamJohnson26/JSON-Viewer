@@ -122,6 +122,19 @@ export function selectValidRoots(
     }
     return true
   })
+  const order = new Map<NodeId, number>()
+  let position = 0
+  const visit = (id: NodeId): void => {
+    order.set(id, position++)
+    const node = document.nodes[id]
+    if (node?.type === 'container') node.childIds.forEach(visit)
+  }
+  visit(document.rootId)
+  roots.sort(
+    (left, right) =>
+      (order.get(left) ?? Number.MAX_SAFE_INTEGER) -
+      (order.get(right) ?? Number.MAX_SAFE_INTEGER),
+  )
   selections.set(ids, roots)
   return roots
 }

@@ -165,53 +165,65 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
     **Log (append-only):**
     - 2026-08-01: Completed full-width non-indented recursive styling, long-value wrapping, muted type colors, compact responsive controls, reduced motion, and zero horizontal overflow at 240 CSS pixels.
 
-33. **[TODO] Implement single and multiple selection**
+33. **[DONE] Implement single and multiple selection**
     **Acceptance:** Click selects, `Shift` selects a visible sibling range, and `Ctrl/Cmd` toggles additive selection. Selection survives unrelated edits through stable IDs and reports a count.
     **Log (append-only):**
+    - 2026-08-01: Added stable-ID single, additive, sibling-range, select-all, pruning, normalized-root, count announcement, and focus-preserving selection behavior with machine and Chrome coverage.
 
-34. **[TODO] Define and implement contextual clipboard serialization**
+34. **[DONE] Define and implement contextual clipboard serialization**
     **Acceptance:** A single node copies its value, keyed sibling selections copy a valid object fragment, and ordered or mixed selections copy a valid array. The context table is isolated and unit-tested.
     **Log (append-only):**
+    - 2026-08-01: Isolated and tested single-value, keyed-sibling, ordered/mixed, dangerous-key, overlap, and deterministic-order clipboard contexts.
 
-35. **[TODO] Implement contextual JSON paste**
+35. **[DONE] Implement contextual JSON paste**
     **Acceptance:** Ordinary paste intuitively inserts into or beside the focused target; active primitive editing and explicit commands support replacement. Invalid or duplicate-key input leaves the document unchanged and shows an inline typed error.
     **Log (append-only):**
+    - 2026-08-01: Added automatic into/beside paste, explicit modes, active-editor replacement, typed inline failures, unchanged-on-error behavior, focus hints, and browser regressions.
 
-36. **[TODO] Implement the accessible context menu**
+36. **[DONE] Implement the accessible context menu**
     **Acceptance:** Base UI primitives render only commands valid for the current selection, support right click and keyboard opening, restore focus correctly, and dispatch domain commands rather than mutating state.
     **Log (append-only):**
+    - 2026-08-01: Added a shared Base UI context menu with right-click/keyboard opening, selection-aware applicability, command dispatch, and tested focus restoration.
 
-37. **[TODO] Implement structural utility operations**
+37. **[DONE] Implement structural utility operations**
     **Acceptance:** Add value, add nested header, duplicate, rename, convert, wrap, unwrap, move up/down, move to another container, reverse children, flatten nested values, remove empty values, remove selection, and clear container are pure, undoable operations with typed failures.
     **Log (append-only):**
+    - 2026-08-01: Added command-backed creation/editing and pure versioned move, reparent, reverse, flatten, empty removal, and selection removal operations with typed failures and exact inverses.
 
-38. **[TODO] Implement text utility operations**
+38. **[DONE] Implement text utility operations**
     **Acceptance:** Uppercase, lowercase, title case, trim, find/replace, prefix/suffix, parse escaped string, and escape string operate predictably over valid selections and preserve unaffected data.
     **Log (append-only):**
+    - 2026-08-01: Added case, trim, literal find/replace, affix, parse-escaped, and escape operations with selection validation and focused tests.
 
-39. **[TODO] Implement primitive conversion and generation operations**
+39. **[DONE] Implement primitive conversion and generation operations**
     **Acceptance:** String-to-number/boolean/null, date recognition override, number formatting, UUID generation, timestamp generation, boolean toggle, and number increment/decrement are pure and undoable.
     **Log (append-only):**
+    - 2026-08-01: Added explicit primitive conversion, date-like/source and number display overrides, deterministic UUID/timestamp generation, boolean toggle, and finite number adjustment.
 
-40. **[TODO] Implement sorting and collection operations**
+40. **[DONE] Implement sorting and collection operations**
     **Acceptance:** Sort by header/value/nested value, filter, deduplicate, group, and persistent reorder preserve deterministic ordering and produce one undoable transaction per invocation.
     **Log (append-only):**
+    - 2026-08-01: Added stable caption/value/path sorting, query filtering, canonical deduplication, collision-safe grouping, and position-based persistent reorder as single transactions.
 
-41. **[TODO] Implement merge, diff, and extraction operations**
+41. **[DONE] Implement merge, diff, and extraction operations**
     **Acceptance:** Shallow merge, deep merge, diff, extract keys, extract values, rename path segments, and select matching values define conflict behavior and return deterministic results or typed errors.
     **Log (append-only):**
+    - 2026-08-01: Added later-wins shallow/deep merge, deterministic diff, key/value extraction, path rename, typed matching queries, and transient select-matching integration.
 
-42. **[TODO] Implement the command palette and shortcuts**
+42. **[DONE] Implement the command palette and shortcuts**
     **Acceptance:** Every applicable context-menu operation is discoverable through a searchable keyboard-accessible palette, with conflict-free shortcuts and correct enablement for current selection.
     **Log (append-only):**
+    - 2026-08-01: Added the shared searchable keyboard palette, parameter dialogs that retain inline failures, selection-aware enablement, documented non-browser-reserved shortcuts, and Chrome coverage.
 
-43. **[TODO] Implement keyboard-only node movement**
+43. **[DONE] Implement keyboard-only node movement**
     **Acceptance:** Users can reorder and reparent selected values and headers without pointer or touch dragging. Invalid cycles and illegal targets are rejected without mutation.
     **Log (append-only):**
+    - 2026-08-01: Added sibling reorder, move-in/out shortcuts, source-path destination movement, visible destination expansion, deterministic selection order, and typed cycle/target rejection.
 
-44. **[TODO] Implement navigation utility commands**
+44. **[DONE] Implement navigation utility commands**
     **Acceptance:** Focus path, show source path, expand descendants, collapse descendants, expand all, and collapse all work with virtualized and non-virtualized projections.
     **Log (append-only):**
+    - 2026-08-01: Added canonical escaped source paths, focus/reveal, descendant/all expansion and collapse, projection-independent ID helpers, and roving-focus recovery when rows become hidden.
 
 45. **[TODO] Implement graphical JSON file import and export**
     **Acceptance:** Strict JSON files can populate the graphical editor, and current canonical JSON can download as a file. There is no raw JSON editing surface; errors never replace the current document.
