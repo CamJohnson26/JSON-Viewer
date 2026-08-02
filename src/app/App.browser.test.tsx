@@ -21,6 +21,12 @@ test('starts with one collapsed blank root and complete tree semantics', async (
   await expect
     .element(screen.getByRole('textbox', { name: 'Add value' }))
     .not.toBeInTheDocument()
+  await expect
+    .element(screen.getByText('Paste JSON to view and edit'))
+    .toBeVisible()
+  await expect
+    .element(screen.getByRole('button', { name: 'Formatting on' }))
+    .not.toBeInTheDocument()
   expect(root.element().querySelector('.disclosure')?.textContent).toBe('')
   await expect
     .element(screen.getByRole('contentinfo', { name: editorLabels.status }))
@@ -41,6 +47,9 @@ test('opens one contextual composer and removes it after commit', async () => {
     .element(screen.getByRole('treeitem', { name: 'number value' }))
     .toBeVisible()
   await expect.element(screen.getByText('1,234', { exact: true })).toBeVisible()
+  await expect
+    .element(screen.getByText('Paste JSON to view and edit'))
+    .not.toBeInTheDocument()
   await expect.element(composer).not.toBeInTheDocument()
   await expect
     .element(screen.getByRole('treeitem', { name: 'number value' }))
@@ -203,7 +212,7 @@ test('edits a primitive on Enter and cancels with Escape', async () => {
   await userEvent.keyboard('{F2}')
   const changedEditor = screen.getByRole('textbox', { name: 'Value source' })
   await changedEditor.fill('after')
-  await screen.getByRole('button', { name: 'Formatting on' }).click()
+  await toggleGlobalFormatting(screen, value.element())
   await expect.element(screen.getByText('after', { exact: true })).toBeVisible()
   await expect.element(changedEditor).not.toBeInTheDocument()
 })
@@ -304,7 +313,7 @@ test('keeps document undo available from non-text controls', async () => {
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('undo from toolbar')
   await userEvent.keyboard('{Enter}')
-  await screen.getByRole('button', { name: 'Formatting on' }).click()
+  screen.getByRole('button', { name: 'Undo' }).element().focus()
   await userEvent.keyboard('{Control>}z{/Control}')
 
   expect(materialize(store.getSnapshot().present)).toEqual([])
@@ -326,7 +335,10 @@ test('applies global and per-value formatting without losing type markers', asyn
     .element(screen.getByLabelText('date type'))
     .toHaveTextContent('D')
   const historyLength = store.getSnapshot().past.length
-  await screen.getByRole('button', { name: 'Formatting on' }).click()
+  await toggleGlobalFormatting(
+    screen,
+    screen.getByRole('treeitem', { name: 'date value' }).element(),
+  )
   await expect
     .element(screen.getByText('2026-08-01', { exact: true }))
     .toBeVisible()
@@ -356,6 +368,16 @@ test('labels imported anonymous items without changing their JSON', async () => 
   expect(second.element().querySelector('.row-reference')?.textContent).toBe(
     '2',
   )
+  expect(first.element().querySelector('.row-reference')).toHaveAttribute(
+    'data-drag-handle',
+    'true',
+  )
+  expect(
+    screen
+      .getByRole('treeitem', { name: 'Blank document' })
+      .element()
+      .querySelector('.row-reference'),
+  ).not.toHaveAttribute('data-drag-handle')
   const rootRow = screen
     .getByRole('treeitem', { name: 'Blank document' })
     .element()
@@ -431,12 +453,10 @@ test('cancels transient composers on blur and Escape', async () => {
   await userEvent.keyboard('{Enter}')
   let composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('discard me')
-  const formatting = screen.getByRole('button', { name: 'Formatting on' })
-  const formattingElement = formatting.element()
-  await formatting.click()
+  await root.click()
 
   await expect.element(composer).not.toBeInTheDocument()
-  expect(globalThis.document.activeElement).toBe(formattingElement)
+  await expect.element(root).toHaveFocus()
   expect(materialize(store.getSnapshot().present)).toEqual([])
 
   root.element().focus()
@@ -448,6 +468,21 @@ test('cancels transient composers on blur and Escape', async () => {
   await expect.element(root).toHaveFocus()
   expect(materialize(store.getSnapshot().present)).toEqual([])
 })
+
+async function toggleGlobalFormatting(
+  screen: Awaited<ReturnType<typeof render>>,
+  target: Element,
+): Promise<void> {
+  target.dispatchEvent(
+    new MouseEvent('contextmenu', { bubbles: true, button: 2 }),
+  )
+  await screen
+    .getByRole('textbox', { name: 'Search available actions' })
+    .fill('toggle inferred formatting')
+  await screen
+    .getByRole('menuitem', { name: 'Toggle inferred formatting' })
+    .click()
+}
 
 test('adds an untouched composer as a neutral blank header', async () => {
   const neutralStore = createEditorTestStore()

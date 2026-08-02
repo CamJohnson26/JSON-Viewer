@@ -179,6 +179,12 @@ const ACTIONS: readonly EditorAction[] = [
     kind: 'command',
   },
   {
+    id: 'formatting.toggle',
+    label: 'Toggle inferred formatting',
+    keywords: 'display global dates numbers',
+    kind: 'command',
+  },
+  {
     id: 'duplicate',
     label: 'Duplicate',
     keywords: 'copy clone',

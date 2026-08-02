@@ -43,6 +43,7 @@ import { useDocumentStore } from '../../state/react.ts'
 import { EditorActionSurface } from '../menus/EditorActionSurface.tsx'
 import { useEditorActions } from './useEditorActions.ts'
 import { useEditorClipboard } from './useEditorClipboard.ts'
+import { usePointerDrag, type PointerDragView } from './usePointerDrag.ts'
 
 interface EditorTreeProps {
   readonly store: DocumentStore
@@ -71,6 +72,7 @@ const EMPTY_COMPOSER: ComposerState = {
 export function EditorTree({ store, onStatus }: EditorTreeProps) {
   const snapshot = useDocumentStore(store)
   const document = snapshot.present
+  const rootNode = document.nodes[document.rootId]
   const [machine, send] = useMachine(editorInteractionMachine, {
     input: { rootId: document.rootId },
   })
@@ -724,6 +726,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
       if (id === 'add.value' || id === 'add.header') {
         openInsert(targetId, id === 'add.header' ? 'header' : 'primitive')
       } else if (id === 'rename') beginEdit(node)
+      else if (id === 'formatting.toggle') send({ type: 'formatting.toggle' })
       else if (id === 'duplicate')
         mutate('subtree.duplicate', targetId, 'Item duplicated')
       else if (id === 'delete')
@@ -734,6 +737,37 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
       else if (id === 'unwrap')
         mutate('header.unwrap', targetId, 'Header unwrapped')
     },
+  })
+
+  const pointerDrag = usePointerDrag({
+    document,
+    selectedIds,
+    expanded,
+    enabled: edit === null && insertSession === null,
+    onSelectSources: setSelection,
+    onSetExpanded: (id, value) =>
+      send({ type: 'expansion.set', containerId: id, expanded: value }),
+    onCommit: (sourceIds, intent) => {
+      const result = execute(
+        {
+          ...commandBase(),
+          type: 'operation.apply',
+          selectedIds: sourceIds,
+          operation: {
+            version: 1,
+            type: 'structure.move-to',
+            containerId: intent.containerId,
+            index: intent.index,
+          },
+        },
+        sourceIds.length === 1
+          ? 'Item moved'
+          : `${sourceIds.length} items moved`,
+      )
+      if (result.ok && result.status === 'noop') onStatus('No move needed')
+      return result.ok
+    },
+    onStatus,
   })
 
   const setFormatting = (id: NodeId, formatting: FormattingOverride): void => {
@@ -751,14 +785,9 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
   return (
     <>
       <div className="editor-toolbar" aria-label="Editor controls">
-        <button
-          aria-pressed={formattingEnabled}
-          className="toolbar-button"
-          onClick={() => send({ type: 'formatting.toggle' })}
-          type="button"
-        >
-          Formatting {formattingEnabled ? 'on' : 'off'}
-        </button>
+        {rootNode?.type === 'container' && rootNode.childIds.length === 0 && (
+          <p className="editor-prompt">Paste JSON to view and edit</p>
+        )}
         <button
           disabled={snapshot.past.length === 0}
           onClick={undo}
@@ -784,13 +813,20 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
       >
         <div
           aria-label="Document"
-          className="document-tree"
+          className={`document-tree${pointerDrag.dragging ? ' is-pointer-dragging' : ''}`}
+          onClickCapture={pointerDrag.onClickCapture}
+          onLostPointerCapture={pointerDrag.onLostPointerCapture}
+          onPointerCancel={pointerDrag.onPointerCancel}
+          onPointerDown={pointerDrag.onPointerDown}
+          onPointerMove={pointerDrag.onPointerMove}
+          onPointerUp={pointerDrag.onPointerUp}
           ref={setTreeElement}
           role="tree"
         >
           <TreeItem
             activeId={activeId}
             selectedIds={selectedIds}
+            pointerDrag={pointerDrag.view}
             registerComposer={(id, element) => {
               if (element) composerRefs.current.set(id, element)
               else composerRefs.current.delete(id)
@@ -850,6 +886,7 @@ interface TreeItemProps {
   readonly setSize: number
   readonly activeId: NodeId
   readonly selectedIds: readonly NodeId[]
+  readonly pointerDrag: PointerDragView | null
   readonly expanded: ReadonlySet<NodeId>
   readonly formattingEnabled: boolean
   readonly edit: ReturnType<typeof selectEditSession>
@@ -899,6 +936,8 @@ function TreeItem(props: TreeItemProps) {
   const visibleItem = props.visibleById.get(node.id)
   const reference = visibleItem?.reference ?? 'Root'
   const selected = props.selectedIds.includes(node.id)
+  const dragSource = props.pointerDrag?.sourceIdSet.has(node.id) === true
+  const dropTarget = props.pointerDrag?.targetId === node.id
   const isExpanded = node.type === 'container' && props.expanded.has(node.id)
   const editing = props.edit?.targetId === node.id
   const anonymousLabel =
@@ -1064,6 +1103,7 @@ function TreeItem(props: TreeItemProps) {
       aria-selected={selected}
       aria-setsize={props.setSize}
       className={`tree-branch level-${props.level}`}
+      data-drag-enabled={node.id === props.document.rootId ? undefined : 'true'}
       data-node-id={node.id}
       onFocus={(event) => {
         if (event.target === event.currentTarget) props.onFocus(node.id)
@@ -1076,8 +1116,14 @@ function TreeItem(props: TreeItemProps) {
       tabIndex={active ? 0 : -1}
     >
       <div
-        className={`tree-row ${node.type === 'container' ? `header-row${preview === null ? '' : ' has-primitive-preview'}` : 'primitive-row'} ${selected ? 'is-selected' : ''} ${active ? 'is-active' : ''}`}
+        className={`tree-row ${node.type === 'container' ? `header-row${preview === null ? '' : ' has-primitive-preview'}` : 'primitive-row'} ${selected ? 'is-selected' : ''} ${active ? 'is-active' : ''}${dragSource ? ' is-drag-source' : ''}`}
         data-depth-tone={(props.level - 1) % 6}
+        data-drop-position={
+          dropTarget ? props.pointerDrag?.position : undefined
+        }
+        data-drop-valid={
+          dropTarget ? String(props.pointerDrag?.valid) : undefined
+        }
         data-header-kind={coloredHeaderKind}
         onClick={(event) => props.onSelect(node.id, event)}
         onDoubleClick={(event) => {
@@ -1090,7 +1136,14 @@ function TreeItem(props: TreeItemProps) {
           }
         }}
       >
-        <span aria-hidden="true" className="row-reference">
+        <span
+          aria-hidden="true"
+          className="row-reference"
+          data-drag-handle={
+            node.id === props.document.rootId ? undefined : 'true'
+          }
+          title={node.id === props.document.rootId ? undefined : 'Drag to move'}
+        >
           {reference}
         </span>
         {node.type === 'container' ? (

@@ -43,6 +43,7 @@ npm run preview
 - `Ctrl/Cmd+Shift+P` opens the command palette.
 - Right click or `Shift+F10` opens applicable row actions.
 - `Alt+ArrowRight`/`Alt+ArrowLeft` expands or collapses a header and all descendants; `Alt+Space` or Alt-click toggles them together.
+- Drag a value or non-root header to move the current selection before, after, or inside another header. Keyboard movement remains available through `Ctrl/Cmd+Shift+Arrow` shortcuts.
 
 The interface derives object/array presentation, generated row references, and formatting without adding editor metadata to exported JSON.
 
@@ -66,4 +67,4 @@ The workflow sets `GITHUB_PAGES=true`, which builds assets under `/JSON-Viewer/`
 
 ## Current Scope
 
-File import/export, URL persistence, large-document virtualization, and final release hardening remain scheduled work. See `Schedule.md` for current progress and acceptance criteria.
+Desktop drag-and-drop is available. URL persistence, large-document virtualization, and final release hardening remain scheduled work. Graphical file import/export is intentionally omitted from the current schedule. See `Schedule.md` for current progress and acceptance criteria.

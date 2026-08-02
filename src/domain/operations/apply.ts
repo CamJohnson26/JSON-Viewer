@@ -2,6 +2,7 @@ import {
   buildParentLookup,
   createImportedPrimitive,
   detectPrimitive,
+  inferContainer,
   validateDocument,
   type ContainerKind,
   type ContainerNode,
@@ -462,6 +463,18 @@ function moveTo(
     ? target
     : nextTarget
   nextTarget = rekey(document, targetTemplate, children)
+  if (nextTarget.kindOrigin === 'neutral') {
+    const inferred = inferContainer(document, nextTarget)
+    if ('code' in inferred)
+      fail(
+        inferred.code === 'DuplicateCaption'
+          ? 'DuplicateCaption'
+          : 'InvalidTarget',
+        inferred.message,
+        targetId,
+      )
+    nextTarget = inferred
+  }
   updates.set(targetId, nextTarget)
   return changed(document, Object.fromEntries(updates), ids, [
     ...updates.keys(),

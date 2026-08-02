@@ -253,6 +253,23 @@ describe('structural operations', () => {
     ).toMatchObject({ ok: false, error: { code: 'InvalidTarget' } })
   })
 
+  test('moves mixed-parent roots as one document-ordered block', () => {
+    const document = parse('[[1],[2],[]]')
+    const [left, right, target] = rootChildren(document) as [
+      NodeId,
+      NodeId,
+      NodeId,
+    ]
+    const one = getContainer(document, left).childIds[0] as NodeId
+    const two = getContainer(document, right).childIds[0] as NodeId
+    const moved = apply(document, [two, one], {
+      type: 'structure.move-to',
+      containerId: target,
+      index: 0,
+    })
+    expect(materialize(moved)).toEqual([[], [], [1, 2]])
+  })
+
   test('reverses, flattens losslessly, removes empties, and removes selections', () => {
     const nested = parse('[[1,2],3]')
     const nestedId = rootChildren(nested)[0] as NodeId
@@ -298,6 +315,33 @@ describe('structural operations', () => {
     })
     expect(materialize(moveResult)).toEqual({ a: [], target: [1] })
     expect(getContainer(moveResult, source).kind).toBe('neutral')
+  })
+
+  test('infers an empty neutral move destination without losing the source value', () => {
+    const document = parse('{"source":1,"target":[]}')
+    const [source, target] = rootChildren(document) as [NodeId, NodeId]
+    const value = getContainer(document, source).childIds[0] as NodeId
+    const neutralDocument: JsonDocument = {
+      ...document,
+      nodes: {
+        ...document.nodes,
+        [target]: {
+          ...getContainer(document, target),
+          kind: 'neutral',
+          kindOrigin: 'neutral',
+        },
+      },
+    }
+    const moved = apply(neutralDocument, [value], {
+      type: 'structure.move-to',
+      containerId: target,
+      index: 0,
+    })
+    expect(materialize(moved)).toEqual({ source: [], target: 1 })
+    expect(getContainer(moved, target)).toMatchObject({
+      kind: 'array',
+      kindOrigin: 'inferred',
+    })
   })
 })
 
