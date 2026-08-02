@@ -46,7 +46,7 @@
 html,
 body,
 #root {
-  min-width: 20rem;
+  min-width: 0;
   min-height: 100%;
   margin: 0;
 }
@@ -60,6 +60,35 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+button {
+  border: 1px solid var(--color-border);
+  border-radius: 0.2rem;
+  padding: 0.16rem 0.42rem;
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-surface-raised) 75%, transparent);
+}
+
+button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+input,
+textarea {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0.2rem;
+  color: var(--color-text);
+  background: #20221e;
 }
 
 :focus-visible {
@@ -77,7 +106,253 @@ textarea {
 
 .editor-canvas {
   min-width: 0;
-  padding: clamp(var(--spacing-row-block), 2vw, var(--spacing-editor-gutter));
+  padding-block: clamp(
+    var(--spacing-row-block),
+    2vw,
+    var(--spacing-editor-gutter)
+  );
+}
+
+.editor-toolbar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0 var(--spacing-row-inline) 0.65rem;
+}
+
+.toolbar-button[aria-pressed='true'] {
+  color: var(--color-focus);
+  border-color: color-mix(in srgb, var(--color-focus) 65%, var(--color-border));
+}
+
+.document-tree,
+.tree-branch,
+.tree-group {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.document-tree {
+  overflow: clip;
+  border-block: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.tree-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.4rem;
+  gap: 0.55rem;
+  align-items: flex-start;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-border) 55%, transparent);
+  padding: 0.48rem var(--spacing-row-inline);
+  overflow-wrap: anywhere;
+  cursor: default;
+}
+
+.tree-branch:nth-child(even) > .tree-row,
+.tree-group > .tree-branch:nth-child(even) > .tree-row {
+  background: color-mix(
+    in srgb,
+    var(--color-surface-raised) 38%,
+    var(--color-surface)
+  );
+}
+
+.tree-group > .tree-branch > .tree-row {
+  box-shadow: inset 3px 0
+    color-mix(in srgb, var(--color-focus) 28%, transparent);
+}
+
+.tree-group > .tree-branch > .tree-group > .tree-branch > .tree-row {
+  box-shadow: inset 3px 0
+    color-mix(in srgb, var(--color-boolean) 30%, transparent);
+}
+
+.tree-row.is-active {
+  background: color-mix(
+    in srgb,
+    var(--color-selection) 64%,
+    var(--color-surface)
+  );
+}
+
+.tree-branch:focus-visible > .tree-row {
+  z-index: 1;
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.header-content {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0.55rem;
+  align-items: baseline;
+  font-weight: var(--font-weight-emphasis);
+}
+
+.disclosure {
+  width: 0.75rem;
+  flex: 0 0 auto;
+  color: var(--color-focus);
+  font-size: 1.3rem;
+  line-height: 0.8;
+  transform: rotate(0deg);
+  transition: transform 100ms ease;
+}
+
+.tree-branch[aria-expanded='true'] > .header-row .disclosure {
+  transform: rotate(90deg);
+}
+
+.blank-caption,
+.empty-value {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.child-count {
+  border-radius: 1rem;
+  padding-inline: 0.42rem;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-canvas) 45%, transparent);
+  font-size: var(--text-status);
+  font-weight: 400;
+}
+
+.type-marker {
+  display: inline-grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 0.18rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.type-string,
+.value-string {
+  color: var(--color-string);
+}
+
+.type-number,
+.value-number {
+  color: var(--color-number);
+}
+
+.type-boolean,
+.value-boolean {
+  color: var(--color-boolean);
+}
+
+.type-null,
+.value-null {
+  color: var(--color-null);
+}
+
+.type-date,
+.type-datetime,
+.value-date,
+.value-datetime {
+  color: var(--color-date);
+}
+
+.primitive-value {
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.row-actions,
+.format-controls {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.row-actions button,
+.format-controls button,
+.add-header-action {
+  border-color: transparent;
+  font-size: var(--text-status);
+}
+
+.format-controls button[aria-pressed='true'] {
+  color: var(--color-focus);
+  border-color: var(--color-border);
+}
+
+.danger-action:hover:not(:disabled) {
+  color: var(--color-error);
+}
+
+.add-composer {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-border) 55%, transparent);
+  padding: 0.42rem var(--spacing-row-inline);
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-canvas) 42%, var(--color-surface));
+}
+
+.add-composer input,
+.inline-editor {
+  width: 100%;
+  padding: 0.32rem 0.5rem;
+}
+
+.composer-prompt {
+  color: var(--color-focus);
+  font-weight: 700;
+}
+
+.edit-wrap {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 20rem;
+  gap: 0.25rem;
+}
+
+textarea.inline-editor {
+  resize: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inline-error {
+  grid-column: 2 / -1;
+  color: var(--color-error);
+  font-size: var(--text-status);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .status-bar {
@@ -90,6 +365,24 @@ textarea {
   background: var(--color-surface);
   font-size: var(--text-status);
   line-height: var(--text-status--line-height);
+}
+
+@media (max-width: 38rem) {
+  .tree-row {
+    flex-wrap: wrap;
+    gap: 0.38rem;
+    padding-inline: 0.6rem;
+  }
+
+  .row-actions,
+  .format-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .add-composer {
+    padding-inline: 0.6rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

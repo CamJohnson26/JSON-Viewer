@@ -18,6 +18,7 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
    **Acceptance:** Enable strict TypeScript settings, linting, formatting, and consistent npm scripts for development, type checking, linting, testing, and building.
    **Log (append-only):**
    - 2026-08-01: Configured strict TypeScript 6, ESLint 10 flat config, Prettier, and development, verification, and build scripts.
+   - 2026-08-01: Pinned ESLint and `@eslint/js` to 9.x after reproducible ESLint 10 project-service crashes under the current TypeScript toolchain.
 
 4. **[DONE] Install the minimal application dependencies**
    **Acceptance:** Add React, Tailwind CSS, Base UI primitives, xState v5, and test tooling. Do not add MobX, WASM, virtualization, or other deferred dependencies.
@@ -109,49 +110,60 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
     **Log (append-only):**
     - 2026-08-01: Added 56 unit/property tests covering strict parsing, inference, invariants, events, structural sharing, replay, store behavior, selectors, and malformed input. Full suite has 57 passing tests.
 
-22. **[TODO] Define transient interaction machines**
+22. **[DONE] Define transient interaction machines**
     **Acceptance:** Use xState only where finite workflows clarify editing, text-edit idle boundaries, context menus, import/export, and URL decoding. Focus, hover, and other ephemeral state do not enter document undo history.
     **Log (append-only):**
+    - 2026-08-01: Added a serializable xState v5 editor machine for focus, expansion, edit sessions, formatting preference, and draft-relative idle boundaries without document mutations.
 
-23. **[TODO] Render the blank root JSON Header**
+23. **[DONE] Render the blank root JSON Header**
     **Acceptance:** Initial load displays one collapsed, selectable, full-width blank header with no visible child content and no object/array terminology.
     **Log (append-only):**
+    - 2026-08-01: Rendered one blank, collapsed, selectable, full-width root header with no child content or exposed container terminology.
 
-24. **[TODO] Implement header expansion and ephemeral add input**
+24. **[DONE] Implement header expansion and ephemeral add input**
     **Acceptance:** Click and `Space` expand or collapse immediately. Expanded headers expose one blank input that becomes document data only on commit and disappears on cancellation or uncommitted blur.
     **Log (append-only):**
+    - 2026-08-01: Added immediate click/Space expansion and local composers that commit only on action, disappear on blur/Escape, reopen from the header, and preserve parent composers after nested insertion.
 
-25. **[TODO] Implement graphical primitive editing**
+25. **[DONE] Implement graphical primitive editing**
     **Acceptance:** Users can add and edit strings, numbers, booleans, null, empty strings, and date-like strings. Focus reveals source input; commit applies inferred semantics as one undo transaction; `Escape` restores the prior value.
     **Log (append-only):**
+    - 2026-08-01: Added source-preserving inline add/edit/cancel flows for every primitive presentation, including empty strings and date-like values, with one transaction per commit.
 
-26. **[TODO] Implement nested JSON Header editing**
+26. **[DONE] Implement nested JSON Header editing**
     **Acceptance:** Users can add, name, edit, expand, collapse, and remove nested full-width headers. Their contents drive kind inference without presenting an object/array choice.
     **Log (append-only):**
+    - 2026-08-01: Added full-width nested header creation, neutral and empty-caption distinction, rename validation, expansion, removal, and action-driven shape inference.
 
-27. **[TODO] Implement core node mutations**
+27. **[DONE] Implement core node mutations**
     **Acceptance:** Rename, duplicate, delete, clear, wrap, and unwrap work through commands and remain lossless, undoable, replayable, and invariant-safe.
     **Log (append-only):**
+    - 2026-08-01: Added command-backed rename, deep duplicate, delete, clear, wrap, and unwrap with exact history behavior and mutation-aware focus recovery.
 
-28. **[TODO] Implement primitive presentation and formatting controls**
+28. **[DONE] Implement primitive presentation and formatting controls**
     **Acceptance:** Values have distinct but accessible presentations for strings, numbers, booleans, null, and date-like strings. Users can disable inferred formatting globally or per value without changing exported JSON.
     **Log (append-only):**
+    - 2026-08-01: Added accessible non-color type markers, source-on-focus display, global formatting preference, and undoable per-value formatting overrides.
 
-29. **[TODO] Implement base keyboard focus behavior**
+29. **[DONE] Implement base keyboard focus behavior**
     **Acceptance:** Roving focus supports `Enter`, `Escape`, `Tab`, and visible focus indicators without making every item a page tab stop.
     **Log (append-only):**
+    - 2026-08-01: Added roving tree focus, inline Enter/Escape/Tab behavior, keyboard-reachable active controls, visible focus, and deterministic focus after edits and history movement.
 
-30. **[TODO] Implement hierarchical keyboard navigation**
+30. **[DONE] Implement hierarchical keyboard navigation**
     **Acceptance:** `ArrowUp/Down`, `ArrowLeft/Right`, `Home`, `End`, and `Space` navigate the visible hierarchy, enter/leave sections, and expand/collapse according to a documented model.
     **Log (append-only):**
+    - 2026-08-01: Implemented and documented visible-preorder arrows, Home, End, Space, mutation shortcuts, and section entry/exit in `docs/editor-keyboard-v1.md`.
 
-31. **[TODO] Implement accessible hierarchy semantics**
+31. **[DONE] Implement accessible hierarchy semantics**
     **Acceptance:** Tested tree or grouped-list semantics expose level, expansion, position, selection, editing, and error state to assistive technology despite the non-indented visual layout.
     **Log (append-only):**
+    - 2026-08-01: Added tested treeitem/group ownership, hierarchy metadata, expansion and selection state, accessible values and type descriptions, inline error relationships, and polite status output.
 
-32. **[TODO] Complete responsive editor styling**
+32. **[DONE] Complete responsive editor styling**
     **Acceptance:** Headers remain full width, recursion remains vertically legible without indentation, long values have a usable overflow treatment, and the page has no horizontal viewport overflow at narrow widths.
     **Log (append-only):**
+    - 2026-08-01: Completed full-width non-indented recursive styling, long-value wrapping, muted type colors, compact responsive controls, reduced motion, and zero horizontal overflow at 240 CSS pixels.
 
 33. **[TODO] Implement single and multiple selection**
     **Acceptance:** Click selects, `Shift` selects a visible sibling range, and `Ctrl/Cmd` toggles additive selection. Selection survives unrelated edits through stable IDs and reports a count.

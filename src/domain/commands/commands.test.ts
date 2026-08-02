@@ -2,6 +2,7 @@ import fc from 'fast-check'
 import { describe, expect, test } from 'vitest'
 
 import {
+  assertDocument,
   getContainer,
   materialize,
   nodeId,
@@ -383,4 +384,254 @@ describe('semantic command compilation', () => {
       { numRuns: 100 },
     )
   })
+
+  test('duplicates a subtree beside its source with fresh IDs and exact undo/redo', () => {
+    const document = fixture('{"x":{"a":[1,true]},"x copy":0}')
+    const root = getContainer(document, document.rootId)
+    const sourceId = root.childIds[0] as NodeId
+    const sourceIds = subtreeIds(document, sourceId)
+    const result = compileCommand(
+      document,
+      0,
+      command({ type: 'subtree.duplicate', targetId: sourceId }),
+      context('duplicate'),
+    )
+    if (!result.ok || result.status !== 'applied')
+      throw new Error('Expected duplicate event')
+
+    const duplicated = applyTransaction(document, result.transaction)
+    const duplicatedRoot = getContainer(duplicated, duplicated.rootId)
+    const copyId = duplicatedRoot.childIds[1] as NodeId
+    const copyIds = subtreeIds(duplicated, copyId)
+    const restored = applyTransaction(
+      duplicated,
+      invertTransaction(result.transaction),
+    )
+    const redone = applyTransaction(restored, result.transaction)
+
+    expect(result.focusId).toBe(copyId)
+    expect(serialize(duplicated)).toBe(
+      '{"x":{"a":[1,true]},"x copy 2":{"a":[1,true]},"x copy":0}',
+    )
+    expect([...copyIds].every((id) => !sourceIds.has(id))).toBe(true)
+    expect(copyIds.size).toBe(sourceIds.size)
+    expect(restored).toEqual(document)
+    expect(redone).toEqual(duplicated)
+    assertDocument(duplicated)
+  })
+
+  test('derives the first available deterministic duplicate caption', () => {
+    const document = fixture('{"x":1,"x copy 2":2}')
+    const sourceId = getContainer(document, document.rootId)
+      .childIds[0] as NodeId
+    const duplicated = apply(
+      document,
+      command({ type: 'subtree.duplicate', targetId: sourceId }),
+      context('duplicate'),
+    )
+
+    expect(serialize(duplicated)).toBe('{"x":1,"x copy":1,"x copy 2":2}')
+  })
+
+  test('clears a root in one patch and restores it exactly on undo and redo', () => {
+    const document = fixture('{"a":[1,{"b":2}]}')
+    const result = compileCommand(
+      document,
+      0,
+      command({ type: 'header.clear', targetId: document.rootId }),
+      context('clear'),
+    )
+    if (!result.ok || result.status !== 'applied')
+      throw new Error('Expected clear event')
+    const cleared = applyTransaction(document, result.transaction)
+    const root = getContainer(cleared, cleared.rootId)
+    const restored = applyTransaction(
+      cleared,
+      invertTransaction(result.transaction),
+    )
+
+    expect(result.transaction.events).toHaveLength(1)
+    expect(result.transaction.events[0]?.records).toHaveLength(
+      Object.keys(document.nodes).length,
+    )
+    expect(result.focusId).toBe(document.rootId)
+    expect(root).toMatchObject({
+      id: document.rootId,
+      caption: null,
+      kind: 'object',
+      kindOrigin: 'imported',
+      childIds: [],
+      entries: [],
+    })
+    expect(restored).toEqual(document)
+    expect(applyTransaction(restored, result.transaction)).toEqual(cleared)
+    assertDocument(cleared)
+  })
+
+  test('clear retains imported empty collection kinds and neutralizes inferred containers', () => {
+    for (const [source, kind] of [
+      ['[1]', 'array'],
+      ['{"a":1}', 'object'],
+    ] as const) {
+      const document = fixture(source)
+      const cleared = apply(
+        document,
+        command({ type: 'header.clear', targetId: document.rootId }),
+      )
+      expect(getContainer(cleared, cleared.rootId)).toMatchObject({
+        kind,
+        kindOrigin: 'imported',
+        childIds: [],
+      })
+    }
+
+    const imported = fixture('[]')
+    const inferred = apply(
+      imported,
+      command({
+        type: 'primitive.add',
+        parentId: imported.rootId,
+        sourceInput: '1',
+      }),
+      context('setup'),
+    )
+    const cleared = apply(
+      inferred,
+      command({ type: 'header.clear', targetId: inferred.rootId }),
+    )
+    expect(getContainer(cleared, cleared.rootId)).toMatchObject({
+      kind: 'neutral',
+      kindOrigin: 'neutral',
+      childIds: [],
+    })
+  })
+
+  test('sets primitive formatting with one record without changing JSON data', () => {
+    const document = fixture('["2026-08-01",1]')
+    const targetId = getContainer(document, document.rootId)
+      .childIds[0] as NodeId
+    const before = document.nodes[targetId]
+    const source = serialize(document)
+    const result = compileCommand(
+      document,
+      0,
+      command({
+        type: 'primitive.formatting.set',
+        targetId,
+        formatting: 'source',
+      }),
+      context('formatting'),
+    )
+    if (!result.ok || result.status !== 'applied')
+      throw new Error('Expected formatting event')
+    const formatted = applyTransaction(document, result.transaction)
+    const after = formatted.nodes[targetId]
+
+    expect(result.focusId).toBe(targetId)
+    expect(result.transaction.events[0]?.records).toHaveLength(1)
+    expect(result.transaction.events[0]).not.toHaveProperty('focusId')
+    expect(after).toEqual({ ...before, formatting: 'source' })
+    expect(serialize(formatted)).toBe(source)
+    expect(
+      applyTransaction(formatted, invertTransaction(result.transaction)),
+    ).toEqual(document)
+    expect(applyTransaction(document, result.transaction)).toEqual(formatted)
+
+    expect(
+      compileCommand(
+        formatted,
+        0,
+        command({
+          type: 'primitive.formatting.set',
+          targetId,
+          formatting: 'source',
+        }),
+        context(),
+      ),
+    ).toEqual({ ok: true, status: 'noop', transaction: null })
+    for (const formatting of ['inherit', 'formatted', 'source'] as const) {
+      const candidate = compileCommand(
+        document,
+        0,
+        command({
+          type: 'primitive.formatting.set',
+          targetId,
+          formatting,
+        }),
+        context(),
+      )
+      expect(candidate.ok).toBe(true)
+    }
+    const malformed = command({
+      type: 'primitive.formatting.set',
+      targetId,
+      formatting: 'inherit',
+    }) as Extract<DocumentCommand, { type: 'primitive.formatting.set' }> & {
+      formatting: string
+    }
+    expect(
+      compileCommand(
+        document,
+        0,
+        { ...malformed, formatting: 'invalid' } as unknown as DocumentCommand,
+        context(),
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'InvalidPayload' } })
+  })
+
+  test('returns natural ephemeral focus hints for mutation commands', () => {
+    const document = fixture('[1,2,3]')
+    const root = getContainer(document, document.rootId)
+    const middle = root.childIds[1] as NodeId
+    const removed = compileCommand(
+      document,
+      0,
+      command({ type: 'subtree.remove', targetId: middle }),
+      context(),
+    )
+    expect(removed).toMatchObject({
+      ok: true,
+      status: 'applied',
+      focusId: root.childIds[2],
+    })
+
+    const last = root.childIds[2] as NodeId
+    const removedLast = compileCommand(
+      document,
+      0,
+      command({ type: 'subtree.remove', targetId: last }),
+      context(),
+    )
+    expect(removedLast).toMatchObject({ focusId: middle })
+
+    const singleton = fixture('[1]')
+    const onlyChild = getContainer(singleton, singleton.rootId)
+      .childIds[0] as NodeId
+    const removedOnlyChild = compileCommand(
+      singleton,
+      0,
+      command({ type: 'subtree.remove', targetId: onlyChild }),
+      context(),
+    )
+    expect(removedOnlyChild).toMatchObject({ focusId: singleton.rootId })
+
+    const wrapped = compileCommand(
+      document,
+      0,
+      command({ type: 'node.wrap', targetId: middle, caption: 'wrapped' }),
+      context('wrap'),
+    )
+    expect(wrapped).toMatchObject({ focusId: nodeId('wrap-0') })
+  })
 })
+
+function subtreeIds(document: JsonDocument, rootId: NodeId): Set<NodeId> {
+  const ids = new Set<NodeId>()
+  const visit = (id: NodeId): void => {
+    ids.add(id)
+    const node = document.nodes[id]
+    if (node?.type === 'container') node.childIds.forEach(visit)
+  }
+  visit(rootId)
+  return ids
+}
