@@ -53,7 +53,7 @@ test('adds an expanded nested header and focuses its composer', async () => {
   await expect.element(header).toHaveAttribute('aria-expanded', 'true')
   const composers = screen.getByRole('textbox', { name: 'Add value' }).all()
   expect(composers).toHaveLength(2)
-  await expect.element(composers[0]!).toHaveFocus()
+  await expect.element(composers[1]!).toHaveFocus()
 })
 
 test('edits a primitive on Enter and cancels with Escape', async () => {
@@ -154,7 +154,7 @@ test('applies global and per-value formatting without losing type markers', asyn
   expect(store.getSnapshot().past).toHaveLength(historyLength)
 })
 
-test('discards uncommitted composers and restores row focus on Escape', async () => {
+test('clears uncommitted drafts without hiding composers', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
   const root = screen.getByRole('treeitem', { name: 'Blank document' })
@@ -165,7 +165,8 @@ test('discards uncommitted composers and restores row focus on Escape', async ()
   const formattingElement = formatting.element()
   await formatting.click()
 
-  await expect.element(composer).not.toBeInTheDocument()
+  await expect.element(composer).toBeInTheDocument()
+  await expect.element(composer).toHaveValue('')
   expect(globalThis.document.activeElement).toBe(formattingElement)
   expect(materialize(store.getSnapshot().present)).toEqual([])
 
@@ -174,7 +175,8 @@ test('discards uncommitted composers and restores row focus on Escape', async ()
   composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('discard again')
   await userEvent.keyboard('{Escape}')
-  await expect.element(composer).not.toBeInTheDocument()
+  await expect.element(composer).toBeInTheDocument()
+  await expect.element(composer).toHaveValue('')
   await expect.element(root).toHaveFocus()
   expect(materialize(store.getSnapshot().present)).toEqual([])
 })
@@ -204,7 +206,7 @@ test('renders an intentionally empty caption distinctly', async () => {
   expect(materialize(emptyStore.getSnapshot().present)).toEqual({ '': [] })
 })
 
-test('dismisses a draft after tabbing through the Header action', async () => {
+test('clears a draft after tabbing through the Header action', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
   await screen.getByRole('treeitem', { name: 'Blank document' }).click()
@@ -216,8 +218,44 @@ test('dismisses a draft after tabbing through the Header action', async () => {
     .toHaveFocus()
   await userEvent.keyboard('{Tab}')
 
-  await expect.element(composer).not.toBeInTheDocument()
+  await expect.element(composer).toBeInTheDocument()
+  await expect.element(composer).toHaveValue('')
   expect(materialize(store.getSnapshot().present)).toEqual([])
+})
+
+test('keeps root and nested composers attached to their owning headers', async () => {
+  const store = createEditorTestStore()
+  const screen = await render(<App store={store} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  const rootComposer = directComposer(root.element())
+
+  await userEvent.fill(rootComposer, 'first')
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  await userEvent.fill(rootComposer, 'second')
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+
+  const first = screen.getByRole('treeitem', { name: 'first', exact: true })
+  const second = screen.getByRole('treeitem', { name: 'second', exact: true })
+  expect(root.element().children[1]).toHaveClass('add-composer')
+  expect(first.element().children[1]).toHaveClass('add-composer')
+  expect(second.element().children[1]).toHaveClass('add-composer')
+
+  const firstComposer = directComposer(first.element())
+  await userEvent.fill(firstComposer, 'discard nested draft')
+  await screen.getByRole('button', { name: 'Formatting on' }).click()
+  await expect.element(firstComposer).toBeInTheDocument()
+  await expect.element(firstComposer).toHaveValue('')
+
+  await userEvent.fill(firstComposer, 'one')
+  await userEvent.keyboard('{Enter}')
+  await userEvent.fill(directComposer(second.element()), 'two')
+  await userEvent.keyboard('{Enter}')
+
+  expect(materialize(store.getSnapshot().present)).toEqual({
+    first: 'one',
+    second: 'two',
+  })
 })
 
 test('reports duplicate caption errors without changing the document', async () => {
@@ -246,6 +284,14 @@ test('reports duplicate caption errors without changing the document', async () 
     .toHaveTextContent('Duplicate caption')
   expect(materialize(store.getSnapshot().present)).toEqual({ a: [], b: [] })
 })
+
+function directComposer(treeItem: Element): HTMLInputElement {
+  const composer = treeItem.querySelector<HTMLInputElement>(
+    ':scope > .add-composer input',
+  )
+  if (!composer) throw new Error('Missing direct composer')
+  return composer
+}
 
 test('renders and edits the complete primitive presentation set', async () => {
   const screen = await render(<App store={createEditorTestStore()} />)

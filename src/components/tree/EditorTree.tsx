@@ -77,7 +77,6 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     readonly id: NodeId
     readonly message: string
   } | null>(null)
-  const [hiddenComposers, setHiddenComposers] = useState<readonly NodeId[]>([])
   const [headerComposerId, setHeaderComposerId] = useState<NodeId | null>(null)
   const rowRefs = useRef(new Map<NodeId, HTMLElement>())
   const composerRefs = useRef(new Map<NodeId, HTMLInputElement>())
@@ -92,7 +91,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     if (!composer) return
     requestedComposerFocus.current = null
     composer.focus()
-  }, [document, expandedIds, hiddenComposers])
+  }, [document, expandedIds])
 
   useEffect(() => {
     const id = requestedRowFocus.current
@@ -148,7 +147,6 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
   ): void => {
     requestedRowFocus.current = null
     setHeaderComposerId(kind === 'header' ? id : null)
-    setHiddenComposers((current) => current.filter((item) => item !== id))
     const composer = composerRefs.current.get(id)
     if (composer) composer.focus()
     else requestedComposerFocus.current = id
@@ -166,9 +164,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     })
   }
   const dismissComposer = (id: NodeId, restoreFocus: boolean): void => {
-    setHiddenComposers((current) =>
-      current.includes(id) ? current : [...current, id],
-    )
+    if (headerComposerId === id) setHeaderComposerId(null)
     if (restoreFocus) focusRow(id)
   }
 
@@ -195,9 +191,6 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
   })
 
   const toggleContainer = (id: NodeId): void => {
-    if (!expanded.has(id)) {
-      setHiddenComposers((current) => current.filter((item) => item !== id))
-    }
     send({ type: 'expansion.toggle', containerId: id })
   }
 
@@ -735,7 +728,6 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
             onSetFormatting={setFormatting}
             onToggle={toggleContainer}
             onUnwrap={(id) => mutate('header.unwrap', id, 'Header unwrapped')}
-            hiddenComposers={hiddenComposers}
             headerComposerId={headerComposerId}
             onDismissComposer={dismissComposer}
             onWrap={wrap}
@@ -769,7 +761,6 @@ interface TreeItemProps {
   readonly edit: ReturnType<typeof selectEditSession>
   readonly editError: string | null
   readonly pasteError: { readonly id: NodeId; readonly message: string } | null
-  readonly hiddenComposers: readonly NodeId[]
   readonly headerComposerId: NodeId | null
   readonly registerRow: (id: NodeId, element: HTMLElement | null) => void
   readonly registerComposer: (
@@ -983,6 +974,21 @@ function TreeItem(props: TreeItemProps) {
       )}
       {node.type === 'container' && isExpanded && (
         <>
+          <Composer
+            inputRef={(element) => {
+              props.registerComposer(node.id, element)
+            }}
+            onAddHeader={(draft, touched) =>
+              props.onAddHeader(node.id, draft, touched)
+            }
+            onAddPrimitive={(draft) => props.onAddPrimitive(node.id, draft)}
+            onDismiss={(restoreFocus) =>
+              props.onDismissComposer(node.id, restoreFocus)
+            }
+            preferredKind={
+              props.headerComposerId === node.id ? 'header' : 'primitive'
+            }
+          />
           <div className="tree-group" role="group">
             {node.childIds.map((childId, index) => (
               <TreeItem
@@ -995,23 +1001,6 @@ function TreeItem(props: TreeItemProps) {
               />
             ))}
           </div>
-          {!props.hiddenComposers.includes(node.id) && (
-            <Composer
-              inputRef={(element) => {
-                props.registerComposer(node.id, element)
-              }}
-              onAddHeader={(draft, touched) =>
-                props.onAddHeader(node.id, draft, touched)
-              }
-              onAddPrimitive={(draft) => props.onAddPrimitive(node.id, draft)}
-              onDismiss={(restoreFocus) =>
-                props.onDismissComposer(node.id, restoreFocus)
-              }
-              preferredKind={
-                props.headerComposerId === node.id ? 'header' : 'primitive'
-              }
-            />
-          )}
         </>
       )}
     </div>

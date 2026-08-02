@@ -145,9 +145,9 @@ export function useEditorActions(options: ActionsOptions) {
         all,
       )
       if (!expanding) {
-        const fallback = ancestorIds(options.document, options.activeId)
-          .filter((id) => targets.includes(id))
-          .at(-1)
+        const fallback = ancestorIds(options.document, options.activeId).find(
+          (id) => targets.includes(id),
+        )
         if (fallback) options.setSelection([fallback], fallback)
       }
       options.setExpanded(targets, expanding)

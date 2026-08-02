@@ -12,7 +12,7 @@ test('completes a graphical nested editing workflow', async ({ page }) => {
   await rootComposer.press('Alt+Enter')
   const header = page.getByRole('treeitem', { name: 'profile' })
   await expect(header).toHaveAttribute('aria-expanded', 'true')
-  const nestedComposer = page.getByRole('textbox', { name: 'Add value' }).nth(0)
+  const nestedComposer = page.getByRole('textbox', { name: 'Add value' }).nth(1)
   await nestedComposer.fill('42')
   await nestedComposer.press('Enter')
   await expect(
