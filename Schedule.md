@@ -273,6 +273,14 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
     **Acceptance:** The production build passes all supported workflows in the latest stable Chrome, uses standards-based browser APIs where available, and has no backend, SSR, analytics, local storage, or IndexedDB dependency.
     **Log (append-only):**
 
-60. **[TODO] Prepare the V1 release**
+60. **[TODO] Rethink the editor component file structure**
+    **Acceptance:** Review `EditorTree.tsx` after feature work is complete and split it into cohesive components and interaction modules with clear ownership. Preserve behavior, accessibility, focus semantics, and performance; avoid fragmentation into trivial wrapper files.
+    **Log (append-only):**
+
+61. **[TODO] Investigate and fix add-button behavior**
+    **Acceptance:** Reproduce the reported add-button problems across root and nested headers, value and header insertion, keyboard and pointer activation, draft blur/cancellation, and focus movement. Fix confirmed defects and add browser regressions for every reproduced case.
+    **Log (append-only):**
+
+62. **[TODO] Prepare the V1 release**
     **Acceptance:** Type checking, linting, automated tests, and production build pass; release behavior matches the resolved V1 scope; deferred features remain absent; known limitations and any `LOST` schedule items are recorded without rewriting history.
     **Log (append-only):**
