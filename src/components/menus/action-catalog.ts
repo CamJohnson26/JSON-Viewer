@@ -154,11 +154,16 @@ const ACTIONS: readonly EditorAction[] = [
     keywords: 'clipboard overwrite',
     kind: 'clipboard',
   },
-  { id: 'add.value', label: 'Add value', keywords: 'new', kind: 'command' },
+  {
+    id: 'add.value',
+    label: 'Add row',
+    keywords: 'new insert below child',
+    kind: 'command',
+  },
   {
     id: 'add.header',
-    label: 'Add nested header',
-    keywords: 'new section',
+    label: 'Add header',
+    keywords: 'new section nested',
     kind: 'command',
   },
   {
@@ -168,7 +173,12 @@ const ACTIONS: readonly EditorAction[] = [
     kind: 'command',
   },
   { id: 'rename', label: 'Rename', keywords: 'caption', kind: 'command' },
-  { id: 'wrap', label: 'Wrap', keywords: 'nest', kind: 'command' },
+  {
+    id: 'wrap',
+    label: 'Promote value to header',
+    keywords: 'wrap nest convert',
+    kind: 'command',
+  },
   { id: 'unwrap', label: 'Unwrap', keywords: 'unnest', kind: 'command' },
   { id: 'clear', label: 'Clear children', keywords: 'empty', kind: 'command' },
   { id: 'delete', label: 'Delete', keywords: 'remove', kind: 'command' },

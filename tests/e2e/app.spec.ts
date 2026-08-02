@@ -7,12 +7,16 @@ test('completes a graphical nested editing workflow', async ({ page }) => {
 
   const root = page.getByRole('treeitem', { name: 'Blank document' })
   await root.click()
-  const rootComposer = page.getByRole('textbox', { name: 'Add value' })
+  await root.focus()
+  await page.keyboard.press('Alt+Enter')
+  const rootComposer = page.getByRole('textbox', { name: 'Add header caption' })
   await rootComposer.fill('profile')
-  await rootComposer.press('Alt+Enter')
+  await rootComposer.press('Enter')
   const header = page.getByRole('treeitem', { name: 'profile' })
   await expect(header).toHaveAttribute('aria-expanded', 'true')
-  const nestedComposer = page.getByRole('textbox', { name: 'Add value' }).nth(1)
+  await header.focus()
+  await page.keyboard.press('Enter')
+  const nestedComposer = page.getByRole('textbox', { name: 'Add value' })
   await nestedComposer.fill('42')
   await nestedComposer.press('Enter')
   await expect(
@@ -29,7 +33,10 @@ test('remains usable at 240 CSS pixels without horizontal overflow', async ({
 }) => {
   await page.setViewportSize({ width: 240, height: 640 })
   await page.goto('/')
-  await page.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = page.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  await root.focus()
+  await page.keyboard.press('Enter')
   await page
     .getByRole('textbox', { name: 'Add value' })
     .fill('long '.repeat(80))
@@ -52,8 +59,10 @@ test('completes a selection clipboard menu and palette workflow', async ({
   await page.goto('/')
   const root = page.getByRole('treeitem', { name: 'Blank document' })
   await root.click()
-  const composer = page.getByRole('textbox', { name: 'Add value' })
+  await root.focus()
   for (const value of [' first ', ' second ']) {
+    await page.keyboard.press('Enter')
+    const composer = page.getByRole('textbox', { name: 'Add value' })
     await composer.fill(value)
     await composer.press('Enter')
   }
@@ -79,18 +88,21 @@ test('completes a selection clipboard menu and palette workflow', async ({
   await expect(page.getByText('first', { exact: true }).first()).toBeVisible()
 })
 
-test('undoes an add while the empty composer retains focus', async ({
-  page,
-}) => {
+test('undoes a contextual add from the inserted row', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = page.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  await root.focus()
+  await page.keyboard.press('Enter')
   const composer = page.getByRole('textbox', { name: 'Add value' })
   await composer.fill('undo me')
   await composer.press('Enter')
   await expect(
     page.getByRole('treeitem', { name: 'string value' }),
   ).toBeVisible()
-  await expect(composer).toBeFocused()
+  await expect(
+    page.getByRole('treeitem', { name: 'string value' }),
+  ).toBeFocused()
 
   await page.keyboard.press('Control+Z')
   await expect(
@@ -103,9 +115,12 @@ test('keeps row geometry stable when selection moves at narrow width', async ({
 }) => {
   await page.setViewportSize({ width: 240, height: 640 })
   await page.goto('/')
-  await page.getByRole('treeitem', { name: 'Blank document' }).click()
-  const composer = page.getByRole('textbox', { name: 'Add value' })
+  const root = page.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  await root.focus()
   for (const value of ['first', 'second']) {
+    await page.keyboard.press('Enter')
+    const composer = page.getByRole('textbox', { name: 'Add value' })
     await composer.fill(value)
     await composer.press('Enter')
   }

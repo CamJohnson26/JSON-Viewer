@@ -187,8 +187,6 @@ export function useEditorActions(options: ActionsOptions) {
     if (
       (action.id === 'unwrap' ||
         action.id === 'clear' ||
-        action.id === 'add.value' ||
-        action.id === 'add.header' ||
         action.id === 'paste.into') &&
       active?.type !== 'container'
     )
@@ -200,6 +198,8 @@ export function useEditorActions(options: ActionsOptions) {
       roots.includes(options.document.rootId)
     )
       return 'The root cannot use this action'
+    if (action.id === 'wrap' && active?.type !== 'primitive')
+      return 'Choose a value'
     if (action.id === 'duplicate' && roots.length !== 1)
       return 'Choose one item'
     if (

@@ -44,11 +44,13 @@ export type DocumentCommand =
   | (CommandBase & {
       readonly type: 'primitive.add'
       readonly parentId: NodeId
+      readonly index?: number
       readonly sourceInput: string
     })
   | (CommandBase & {
       readonly type: 'header.add'
       readonly parentId: NodeId
+      readonly index?: number
       readonly caption: string | null
     })
   | (CommandBase & {
@@ -177,6 +179,7 @@ export function compileCommand(
     case 'primitive.add': {
       if (
         !validNodeId(command.parentId) ||
+        !validOptionalIndex(command.index) ||
         typeof command.sourceInput !== 'string'
       ) {
         return failure('InvalidPayload', 'Primitive add payload is invalid')
@@ -187,10 +190,14 @@ export function compileCommand(
       if (target.type !== 'container')
         return failure('InvalidTarget', 'Children require a container target')
       const added = createPrimitive(context.createId(), command.sourceInput)
-      return addNode(document, target, added, context)
+      return addNode(document, target, added, context, command.index)
     }
     case 'header.add': {
-      if (!validNodeId(command.parentId) || !validCaption(command.caption)) {
+      if (
+        !validNodeId(command.parentId) ||
+        !validOptionalIndex(command.index) ||
+        !validCaption(command.caption)
+      ) {
         return failure('InvalidPayload', 'Header add payload is invalid')
       }
       const target = document.nodes[command.parentId]
@@ -199,7 +206,7 @@ export function compileCommand(
       if (target.type !== 'container')
         return failure('InvalidTarget', 'Children require a container target')
       const added = emptyHeader(context.createId(), command.caption)
-      return addNode(document, target, added, context)
+      return addNode(document, target, added, context, command.index)
     }
     case 'header.rename':
       if (!validNodeId(command.targetId) || !validCaption(command.caption))
@@ -492,12 +499,18 @@ function addNode(
   parent: ContainerNode,
   added: DocumentNode,
   context: CommandContext,
+  requestedIndex?: number,
 ): CommandResult {
   if (document.nodes[added.id])
     return failure('IdCollision', `Node ID already exists: ${added.id}`)
+  const index = requestedIndex ?? parent.childIds.length
+  if (index > parent.childIds.length)
+    return failure('InvalidPayload', 'Add position is out of range')
+  const childIds = [...parent.childIds]
+  childIds.splice(index, 0, added.id)
   const draftParent = {
     ...parent,
-    childIds: [...parent.childIds, added.id],
+    childIds,
   }
   const draft: JsonDocument = {
     rootId: document.rootId,
@@ -522,6 +535,13 @@ function addNode(
       records,
     },
     added.id,
+  )
+}
+
+function validOptionalIndex(value: unknown): value is number | undefined {
+  return (
+    value === undefined ||
+    (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
   )
 }
 

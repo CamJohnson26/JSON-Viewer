@@ -35,6 +35,7 @@ import {
   selectValidRoots,
   type UiContainerNode,
   type UiDocumentNode,
+  type VisibleItem,
 } from '../../state/selectors.ts'
 import type { DocumentStore } from '../../state/store.ts'
 import { useDocumentStore } from '../../state/react.ts'
@@ -51,6 +52,13 @@ interface ComposerState {
   readonly draft: string
   readonly touched: boolean
   readonly error: string | null
+}
+
+interface InsertSession {
+  readonly anchorId: NodeId
+  readonly parentId: NodeId
+  readonly index: number
+  readonly kind: 'primitive' | 'header'
 }
 
 const EMPTY_COMPOSER: ComposerState = {
@@ -73,12 +81,16 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
   const expanded = useMemo(() => new Set(expandedIds), [expandedIds])
   const [visibleSelector] = useState(() => createVisibleSelector())
   const visible = visibleSelector(document, expanded)
+  const visibleById = useMemo(
+    () => new Map(visible.map((item) => [item.id, item])),
+    [visible],
+  )
   const [editError, setEditError] = useState<string | null>(null)
   const [pasteError, setPasteError] = useState<{
     readonly id: NodeId
     readonly message: string
   } | null>(null)
-  const [headerComposerId, setHeaderComposerId] = useState<NodeId | null>(null)
+  const [insertSession, setInsertSession] = useState<InsertSession | null>(null)
   const rowRefs = useRef(new Map<NodeId, HTMLElement>())
   const composerRefs = useRef(new Map<NodeId, HTMLInputElement>())
   const requestedComposerFocus = useRef<NodeId | null>(null)
@@ -92,7 +104,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     if (!composer) return
     requestedComposerFocus.current = null
     composer.focus()
-  }, [document, expandedIds])
+  }, [document, expandedIds, insertSession])
 
   useEffect(() => {
     const id = requestedRowFocus.current
@@ -142,15 +154,26 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     send({ type: 'selection.set', nodeIds: ids, anchorNodeId: focusId })
     requestAnimationFrame(() => rowRefs.current.get(focusId)?.focus())
   }
-  const focusComposer = (
-    id: NodeId,
+  const openInsert = (
+    anchorId: NodeId,
     kind: 'primitive' | 'header' = 'primitive',
   ): void => {
+    const anchor = document.nodes[anchorId]
+    if (!anchor) return
+    const location = selectParent(document, anchorId)
+    const parentId = anchor.type === 'container' ? anchorId : location?.parentId
+    if (!parentId) return
+    const index =
+      anchor.type === 'container'
+        ? anchor.childIds.length
+        : (location?.index ?? -1) + 1
+    if (anchor.type === 'container')
+      send({ type: 'expansion.set', containerId: anchorId, expanded: true })
     requestedRowFocus.current = null
-    setHeaderComposerId(kind === 'header' ? id : null)
-    const composer = composerRefs.current.get(id)
+    setInsertSession({ anchorId, parentId, index, kind })
+    requestedComposerFocus.current = anchorId
+    const composer = composerRefs.current.get(anchorId)
     if (composer) composer.focus()
-    else requestedComposerFocus.current = id
   }
   const focusRow = (id: NodeId): void => {
     focusNode(id)
@@ -165,7 +188,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     })
   }
   const dismissComposer = (id: NodeId, restoreFocus: boolean): void => {
-    if (headerComposerId === id) setHeaderComposerId(null)
+    setInsertSession((current) => (current?.anchorId === id ? null : current))
     if (restoreFocus) focusRow(id)
   }
 
@@ -195,30 +218,40 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     send({ type: 'expansion.toggle', containerId: id })
   }
 
-  const addPrimitive = (parentId: NodeId, draft: string): string | null => {
-    setHeaderComposerId(null)
+  const addPrimitive = (
+    parentId: NodeId,
+    index: number,
+    draft: string,
+  ): string | null => {
     const result = execute(
-      { ...commandBase(), type: 'primitive.add', parentId, sourceInput: draft },
+      {
+        ...commandBase(),
+        type: 'primitive.add',
+        parentId,
+        index,
+        sourceInput: draft,
+      },
       'Value added',
     )
     if (!result.ok) {
       return presentEditorMessage(result.error.message)
     }
-    focusComposer(parentId)
+    if (result.status === 'applied') setInsertSession(null)
     return null
   }
 
   const addHeader = (
     parentId: NodeId,
+    index: number,
     draft: string,
     touched: boolean,
   ): string | null => {
-    setHeaderComposerId(null)
     const result = execute(
       {
         ...commandBase(),
         type: 'header.add',
         parentId,
+        index,
         caption: touched ? draft : null,
       },
       'Header added',
@@ -227,7 +260,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
       return presentEditorMessage(result.error.message)
     }
     if (result.status === 'applied') {
-      focusComposer(result.focusId)
+      setInsertSession(null)
       send({
         type: 'expansion.set',
         containerId: result.focusId,
@@ -237,7 +270,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     return null
   }
 
-  const beginEdit = (node: UiDocumentNode): void => {
+  const beginEdit = (node: UiDocumentNode, initialDraft?: string): void => {
     if (node.type === 'container' && node.id === document.rootId) return
     setEditError(null)
     send({
@@ -245,7 +278,8 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
       kind: node.type === 'primitive' ? 'primitive' : 'header',
       targetId: node.id,
       sourceDraft:
-        node.type === 'primitive' ? node.sourceInput : (node.caption ?? ''),
+        initialDraft ??
+        (node.type === 'primitive' ? node.sourceInput : (node.caption ?? '')),
     })
   }
 
@@ -355,6 +389,8 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
         : undefined
     const moved = direction === 'undo' ? store.undo() : store.redo()
     if (!moved) return
+    setInsertSession(null)
+    requestedComposerFocus.current = null
     const nextDocument = store.getSnapshot().present
     if (redoFocus && nextDocument.nodes[redoFocus]) focusHistoryRow(redoFocus)
     else if (nextDocument.nodes[activeId]) focusHistoryRow(activeId)
@@ -476,6 +512,18 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
       else onStatus('The selection cannot move farther out')
       return
     }
+    const directCharacter = Array.from(event.key).length === 1
+    const altGraph = event.getModifierState('AltGraph')
+    if (
+      directCharacter &&
+      (event.key !== ' ' || node.type === 'primitive') &&
+      ((!event.ctrlKey && !event.metaKey && !event.altKey) || altGraph) &&
+      !(node.type === 'container' && id === document.rootId)
+    ) {
+      stop()
+      beginEdit(node, event.key)
+      return
+    }
     switch (event.key) {
       case 'ArrowDown':
         stop()
@@ -502,7 +550,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
           send({ type: 'expansion.set', containerId: id, expanded: true })
         else if (node.type === 'container' && node.childIds[0])
           focusOnly(node.childIds[0])
-        else if (node.type === 'container') focusComposer(id)
+        else if (node.type === 'container') openInsert(id)
         break
       case 'ArrowLeft': {
         stop()
@@ -525,15 +573,10 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
         break
       case 'Enter':
         stop()
-        if (node.type === 'primitive') beginEdit(node)
-        else {
-          if (!expanded.has(id))
-            send({ type: 'expansion.set', containerId: id, expanded: true })
-          focusComposer(id)
-        }
+        openInsert(id, event.altKey ? 'header' : 'primitive')
         break
       case 'F2':
-        if (node.type === 'container' && id !== document.rootId) {
+        if (id !== document.rootId) {
           stop()
           beginEdit(node)
         }
@@ -647,10 +690,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
       const node = document.nodes[targetId]
       if (!node) return
       if (id === 'add.value' || id === 'add.header') {
-        if (node.type === 'container') {
-          send({ type: 'expansion.set', containerId: node.id, expanded: true })
-          focusComposer(node.id, id === 'add.header' ? 'header' : 'primitive')
-        }
+        openInsert(targetId, id === 'add.header' ? 'header' : 'primitive')
       } else if (id === 'rename') beginEdit(node)
       else if (id === 'duplicate')
         mutate('subtree.duplicate', targetId, 'Item duplicated')
@@ -730,6 +770,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
             expanded={expanded}
             formattingEnabled={formattingEnabled}
             id={document.rootId}
+            insertSession={insertSession}
             level={1}
             onAddHeader={addHeader}
             onAddPrimitive={addPrimitive}
@@ -750,7 +791,6 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
             onToggle={toggleContainer}
             onUndo={undo}
             onUnwrap={(id) => mutate('header.unwrap', id, 'Header unwrapped')}
-            headerComposerId={headerComposerId}
             onDismissComposer={dismissComposer}
             onWrap={wrap}
             onPasteReplace={(source) => {
@@ -763,6 +803,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
               else rowRefs.current.delete(id)
             }}
             setSize={1}
+            visibleById={visibleById}
           />
         </div>
       </EditorActionSurface>
@@ -783,7 +824,8 @@ interface TreeItemProps {
   readonly edit: ReturnType<typeof selectEditSession>
   readonly editError: string | null
   readonly pasteError: { readonly id: NodeId; readonly message: string } | null
-  readonly headerComposerId: NodeId | null
+  readonly insertSession: InsertSession | null
+  readonly visibleById: ReadonlyMap<NodeId, VisibleItem>
   readonly registerRow: (id: NodeId, element: HTMLElement | null) => void
   readonly registerComposer: (
     id: NodeId,
@@ -799,9 +841,14 @@ interface TreeItemProps {
   readonly onBeginEdit: (node: UiDocumentNode) => void
   readonly onCommitEdit: (value: string) => void
   readonly onCancelEdit: () => void
-  readonly onAddPrimitive: (id: NodeId, draft: string) => string | null
+  readonly onAddPrimitive: (
+    id: NodeId,
+    index: number,
+    draft: string,
+  ) => string | null
   readonly onAddHeader: (
     id: NodeId,
+    index: number,
     draft: string,
     touched: boolean,
   ) => string | null
@@ -819,6 +866,8 @@ function TreeItem(props: TreeItemProps) {
   const node = props.document.nodes[props.id]
   if (!node) return null
   const active = props.activeId === node.id
+  const visibleItem = props.visibleById.get(node.id)
+  const reference = visibleItem?.reference ?? 'Root'
   const selected = props.selectedIds.includes(node.id)
   const isExpanded = node.type === 'container' && props.expanded.has(node.id)
   const editing = props.edit?.targetId === node.id
@@ -844,6 +893,33 @@ function TreeItem(props: TreeItemProps) {
   const nodePasteError =
     props.pasteError?.id === node.id ? props.pasteError.message : null
   const descriptionId = `kind-${node.id}`
+  const shape = visibleItem?.containerPresentation
+  const shapeLabel =
+    shape === 'object'
+      ? 'Object'
+      : shape === 'array'
+        ? 'Array'
+        : shape === 'single'
+          ? 'Single value'
+          : 'Header'
+  const previewNode =
+    node.type === 'container' &&
+    !isExpanded &&
+    node.caption !== null &&
+    node.childIds.length === 1
+      ? props.document.nodes[node.childIds[0] as NodeId]
+      : undefined
+  const preview =
+    previewNode?.type === 'primitive'
+      ? formatPrimitive(previewNode, { enabled: props.formattingEnabled }) ||
+        'empty string'
+      : null
+  const coloredHeaderKind =
+    node.type === 'container' &&
+    preview === null &&
+    (shape === 'object' || shape === 'array')
+      ? shape
+      : undefined
 
   const actions = (
     <span aria-label="Item actions" className="row-actions">
@@ -884,16 +960,16 @@ function TreeItem(props: TreeItemProps) {
           Clear
         </button>
       )}
-      {node.id !== props.document.rootId && (
+      {node.type === 'primitive' && (
         <button
-          aria-label="Wrap item"
+          aria-label="Promote value to header"
           onClick={(event) => {
             event.stopPropagation()
             props.onWrap(node.id)
           }}
           type="button"
         >
-          Wrap
+          Promote
         </button>
       )}
       {node.type === 'container' && node.id !== props.document.rootId && (
@@ -947,10 +1023,7 @@ function TreeItem(props: TreeItemProps) {
   return (
     <div
       aria-describedby={
-        [
-          node.type === 'primitive' ? descriptionId : null,
-          nodePasteError ? pasteErrorId : null,
-        ]
+        [descriptionId, nodePasteError ? pasteErrorId : null]
           .filter(Boolean)
           .join(' ') || undefined
       }
@@ -973,15 +1046,23 @@ function TreeItem(props: TreeItemProps) {
       tabIndex={active ? 0 : -1}
     >
       <div
-        className={`tree-row ${node.type === 'container' ? 'header-row' : 'primitive-row'} ${selected ? 'is-selected' : ''} ${active ? 'is-active' : ''}`}
+        className={`tree-row ${node.type === 'container' ? `header-row${preview === null ? '' : ' has-primitive-preview'}` : 'primitive-row'} ${selected ? 'is-selected' : ''} ${active ? 'is-active' : ''}`}
+        data-depth-tone={(props.level - 1) % 6}
+        data-header-kind={coloredHeaderKind}
         onClick={(event) => props.onSelect(node.id, event)}
         onDoubleClick={(event) => {
-          if (node.type === 'primitive') {
+          if (
+            node.type === 'primitive' ||
+            (node.type === 'container' && node.id !== props.document.rootId)
+          ) {
             event.stopPropagation()
             props.onBeginEdit(node)
           }
         }}
       >
+        <span aria-hidden="true" className="row-reference">
+          {reference}
+        </span>
         {node.type === 'container' ? (
           <HeaderContent
             anonymousLabel={anonymousLabel}
@@ -993,6 +1074,7 @@ function TreeItem(props: TreeItemProps) {
             onCommit={props.onCommitEdit}
             onIdle={() => props.onEditIdle(node.id)}
             root={node.id === props.document.rootId}
+            preview={preview}
             sourceDraft={props.edit?.sourceDraft ?? ''}
           />
         ) : (
@@ -1013,50 +1095,59 @@ function TreeItem(props: TreeItemProps) {
           {formattingActions}
           {actions}
         </span>
-        {node.type === 'primitive' && (
-          <span className="sr-only" id={descriptionId}>
-            Type: {node.detectedKind}. Value:{' '}
-            {node.sourceInput || 'empty string'}
-          </span>
-        )}
+        <span className="sr-only" id={descriptionId}>
+          Reference {reference}.{' '}
+          {node.type === 'primitive'
+            ? `Type: ${node.detectedKind}. Value: ${node.sourceInput || 'empty string'}`
+            : `${shapeLabel} header${preview === null ? '' : `. Collapsed value: ${preview}`}`}
+        </span>
       </div>
       {nodePasteError && !editing && (
         <span className="inline-error" id={pasteErrorId} role="alert">
           {nodePasteError}
         </span>
       )}
+      {props.insertSession?.anchorId === node.id && (
+        <Composer
+          inputRef={(element) => {
+            props.registerComposer(node.id, element)
+          }}
+          onAddHeader={(draft, touched) =>
+            props.onAddHeader(
+              props.insertSession!.parentId,
+              props.insertSession!.index,
+              draft,
+              touched,
+            )
+          }
+          onAddPrimitive={(draft) =>
+            props.onAddPrimitive(
+              props.insertSession!.parentId,
+              props.insertSession!.index,
+              draft,
+            )
+          }
+          onDismiss={(restoreFocus) =>
+            props.onDismissComposer(node.id, restoreFocus)
+          }
+          onRedo={props.onRedo}
+          onUndo={props.onUndo}
+          preferredKind={props.insertSession.kind}
+        />
+      )}
       {node.type === 'container' && isExpanded && (
-        <>
-          <Composer
-            inputRef={(element) => {
-              props.registerComposer(node.id, element)
-            }}
-            onAddHeader={(draft, touched) =>
-              props.onAddHeader(node.id, draft, touched)
-            }
-            onAddPrimitive={(draft) => props.onAddPrimitive(node.id, draft)}
-            onDismiss={(restoreFocus) =>
-              props.onDismissComposer(node.id, restoreFocus)
-            }
-            onRedo={props.onRedo}
-            onUndo={props.onUndo}
-            preferredKind={
-              props.headerComposerId === node.id ? 'header' : 'primitive'
-            }
-          />
-          <div className="tree-group" role="group">
-            {node.childIds.map((childId, index) => (
-              <TreeItem
-                {...props}
-                id={childId}
-                key={childId}
-                level={props.level + 1}
-                position={index + 1}
-                setSize={node.childIds.length}
-              />
-            ))}
-          </div>
-        </>
+        <div className="tree-group" role="group">
+          {node.childIds.map((childId, index) => (
+            <TreeItem
+              {...props}
+              id={childId}
+              key={childId}
+              level={props.level + 1}
+              position={index + 1}
+              setSize={node.childIds.length}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
@@ -1076,30 +1167,35 @@ function HeaderContent({
   node,
   root,
   anonymousLabel,
+  preview,
   editing,
   ...editable
 }: EditableProps & {
   readonly node: UiContainerNode
   readonly root: boolean
   readonly anonymousLabel: string | null
+  readonly preview: string | null
   readonly editing: boolean
 }) {
-  if (editing)
-    return <InlineEditor {...editable} ariaLabel="Header caption" singleLine />
   return (
     <span className="header-content">
-      <span aria-hidden="true" className="disclosure">
-        &gt;
-      </span>
-      <span className={node.caption === null ? 'blank-caption' : undefined}>
-        {root
-          ? ''
-          : node.caption === null
-            ? anonymousLabel
-            : node.caption === ''
-              ? '""'
-              : node.caption}
-      </span>
+      <span aria-hidden="true" className="disclosure" />
+      {editing ? (
+        <InlineEditor {...editable} ariaLabel="Header caption" singleLine />
+      ) : (
+        <span className={node.caption === null ? 'blank-caption' : undefined}>
+          {root
+            ? ''
+            : node.caption === null
+              ? anonymousLabel
+              : node.caption === ''
+                ? '""'
+                : node.caption}
+          {preview !== null && (
+            <span className="collapsed-preview">: {preview}</span>
+          )}
+        </span>
+      )}
       <span className="child-count">{node.childIds.length}</span>
     </span>
   )
@@ -1221,8 +1317,6 @@ function Composer({
   readonly preferredKind: 'primitive' | 'header'
 }) {
   const [composer, setComposer] = useState(EMPTY_COMPOSER)
-  const inputElement = useRef<HTMLInputElement | null>(null)
-  const preserveOnNextExit = useRef(false)
   const errorId = `composer-error-${useId()}`
   const commit = (kind: 'primitive' | 'header'): void => {
     const error =
@@ -1230,10 +1324,7 @@ function Composer({
         ? onAddPrimitive(composer.draft)
         : onAddHeader(composer.draft, composer.touched)
     if (error) setComposer((current) => ({ ...current, error }))
-    else {
-      preserveOnNextExit.current = kind === 'header'
-      setComposer(EMPTY_COMPOSER)
-    }
+    else setComposer(EMPTY_COMPOSER)
   }
   return (
     <div className="add-composer">
@@ -1246,17 +1337,7 @@ function Composer({
         aria-label={
           preferredKind === 'header' ? 'Add header caption' : 'Add value'
         }
-        onBlur={(event) => {
-          if (preserveOnNextExit.current) {
-            preserveOnNextExit.current = false
-            return
-          }
-          if (
-            event.relatedTarget instanceof HTMLElement &&
-            event.relatedTarget.classList.contains('add-header-action')
-          ) {
-            return
-          }
+        onBlur={() => {
           setComposer(EMPTY_COMPOSER)
           onDismiss(false)
         }}
@@ -1283,32 +1364,12 @@ function Composer({
             onDismiss(true)
           } else if (event.key === 'Enter') {
             event.preventDefault()
-            commit(event.altKey ? 'header' : preferredKind)
+            commit(preferredKind)
           }
         }}
-        ref={(element) => {
-          inputElement.current = element
-          inputRef(element)
-        }}
+        ref={inputRef}
         value={composer.draft}
       />
-      <button
-        aria-label="Add header"
-        className="add-header-action"
-        onBlur={(event) => {
-          if (preserveOnNextExit.current) {
-            preserveOnNextExit.current = false
-            return
-          }
-          if (event.relatedTarget === inputElement.current) return
-          setComposer(EMPTY_COMPOSER)
-          onDismiss(false)
-        }}
-        onClick={() => commit('header')}
-        type="button"
-      >
-        Header
-      </button>
       {composer.error && (
         <span className="inline-error" id={errorId} role="alert">
           {composer.error}

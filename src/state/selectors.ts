@@ -2,6 +2,7 @@ import {
   buildParentLookup,
   documentStructureToken,
   formatPrimitive,
+  type ContainerKind,
   type ContainerNode,
   type FormattingOptions,
   type JsonDocument,
@@ -174,6 +175,43 @@ export interface VisibleItem {
   readonly depth: number
   readonly index: number
   readonly path: readonly NodeId[]
+  readonly reference: string
+  readonly containerPresentation?: 'object' | 'array' | 'single' | 'neutral'
+}
+
+type ContainerPresentation = NonNullable<VisibleItem['containerPresentation']>
+
+export function spreadsheetColumn(index: number): string {
+  let ordinal = index + 1
+  let result = ''
+  while (ordinal > 0) {
+    ordinal--
+    result = String.fromCharCode(65 + (ordinal % 26)) + result
+    ordinal = Math.floor(ordinal / 26)
+  }
+  return result
+}
+
+export function childReference(
+  parentReference: string,
+  parentKind: ContainerKind,
+  childIndex: number,
+): string {
+  const segment =
+    parentKind === 'object'
+      ? spreadsheetColumn(childIndex)
+      : String(childIndex + 1)
+  return parentReference === 'Root' ? segment : `${parentReference}.${segment}`
+}
+
+function containerPresentation(kind: ContainerKind): ContainerPresentation {
+  return kind === 'object'
+    ? 'object'
+    : kind === 'array'
+      ? 'array'
+      : kind === 'scalar'
+        ? 'single'
+        : 'neutral'
 }
 
 export function selectVisibleItems(
@@ -187,18 +225,36 @@ export function selectVisibleItems(
     depth: number,
     index: number,
     path: readonly NodeId[],
+    reference: string,
   ): void => {
     const node = document.nodes[id]
     if (!node) return
     const nextPath = [...path, id]
-    result.push({ id, parentId, depth, index, path: nextPath })
+    result.push({
+      id,
+      parentId,
+      depth,
+      index,
+      path: nextPath,
+      reference,
+      ...(node.type === 'container'
+        ? { containerPresentation: containerPresentation(node.kind) }
+        : {}),
+    })
     if (node.type === 'container' && expanded.has(id)) {
       node.childIds.forEach((childId, childIndex) =>
-        visit(childId, id, depth + 1, childIndex, nextPath),
+        visit(
+          childId,
+          id,
+          depth + 1,
+          childIndex,
+          nextPath,
+          childReference(reference, node.kind, childIndex),
+        ),
       )
     }
   }
-  visit(document.rootId, null, 0, 0, [])
+  visit(document.rootId, null, 0, 0, [], 'Root')
   return result
 }
 

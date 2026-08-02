@@ -15,6 +15,7 @@ import {
 import {
   createDocumentStore,
   createVisibleSelector,
+  spreadsheetColumn,
   selectChildren,
   selectCommonParent,
   selectContiguous,
@@ -326,6 +327,13 @@ describe('focused selectors', () => {
     if (!third) throw new Error('Missing visible child')
 
     expect(visible.map((item) => item.depth)).toEqual([0, 1, 2, 2, 1])
+    expect(visible.map((item) => item.reference)).toEqual([
+      'Root',
+      'A',
+      'A.1',
+      'A.2',
+      'B',
+    ])
     expect(third.path).toEqual([document.rootId, a, third.id])
     const memoized = createVisibleSelector()
     expect(memoized(document, expanded)).toBe(memoized(document, expanded))
@@ -357,6 +365,19 @@ describe('focused selectors', () => {
     expect(memoized(store.getSnapshot().present, stableExpanded)).not.toBe(
       beforeEdit,
     )
+  })
+
+  test('generates spreadsheet reference segments past Z', () => {
+    expect([0, 25, 26, 27, 51, 52, 701, 702].map(spreadsheetColumn)).toEqual([
+      'A',
+      'Z',
+      'AA',
+      'AB',
+      'AZ',
+      'BA',
+      'ZZ',
+      'AAA',
+    ])
   })
 
   test('keeps parent and unrelated path references across publications', () => {

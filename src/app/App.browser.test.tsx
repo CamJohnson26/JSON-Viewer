@@ -21,14 +21,18 @@ test('starts with one collapsed blank root and complete tree semantics', async (
   await expect
     .element(screen.getByRole('textbox', { name: 'Add value' }))
     .not.toBeInTheDocument()
+  expect(root.element().querySelector('.disclosure')?.textContent).toBe('')
   await expect
     .element(screen.getByRole('contentinfo', { name: editorLabels.status }))
     .toHaveTextContent('Ready')
 })
 
-test('expands and adds primitives while retaining a fresh composer', async () => {
+test('opens one contextual composer and removes it after commit', async () => {
   const screen = await render(<App store={createEditorTestStore()} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('1234')
   await userEvent.keyboard('{Enter}')
@@ -37,34 +41,152 @@ test('expands and adds primitives while retaining a fresh composer', async () =>
     .element(screen.getByRole('treeitem', { name: 'number value' }))
     .toBeVisible()
   await expect.element(screen.getByText('1,234', { exact: true })).toBeVisible()
-  await expect.element(composer).toHaveValue('')
-  await expect.element(composer).toHaveFocus()
+  await expect.element(composer).not.toBeInTheDocument()
+  await expect
+    .element(screen.getByRole('treeitem', { name: 'number value' }))
+    .toHaveFocus()
 })
 
-test('adds an expanded nested header and focuses its composer', async () => {
-  const screen = await render(<App store={createEditorTestStore()} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
-  const rootComposer = screen.getByRole('textbox', { name: 'Add value' })
-  await rootComposer.fill('details')
+test('starts direct editing by typing on a focused row', async () => {
+  const store = createEditorTestStore()
+  const screen = await render(<App store={store} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
+  await screen.getByRole('textbox', { name: 'Add value' }).fill('before')
+  await userEvent.keyboard('{Enter}')
+  const value = screen.getByRole('treeitem', { name: 'string value' })
+  value.element().focus()
+
+  await userEvent.keyboard('x')
+
+  const editor = screen.getByRole('textbox', { name: 'Value source' })
+  await expect.element(editor).toHaveValue('x')
+  await userEvent.keyboard('{Enter}')
+  expect(materialize(store.getSnapshot().present)).toEqual(['x'])
+
+  value.element().focus()
+  await userEvent.keyboard(' ')
+  const spaceEditor = screen.getByRole('textbox', { name: 'Value source' })
+  await expect.element(spaceEditor).toHaveValue(' ')
+  await userEvent.keyboard('{Escape}')
+})
+
+test('clears an insertion session when document history moves', async () => {
+  const store = createEditorTestStore()
+  const screen = await render(<App store={store} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
+  await screen.getByRole('textbox', { name: 'Add value' }).fill('temporary')
+  await userEvent.keyboard('{Enter}')
+  const value = screen.getByRole('treeitem', { name: 'string value' })
+  value.element().focus()
+  await userEvent.keyboard('{Enter}')
+  const composer = screen.getByRole('textbox', { name: 'Add value' })
+
+  await userEvent.keyboard('{Control>}z{/Control}')
+
+  await expect.element(composer).not.toBeInTheDocument()
+  await expect.element(value).not.toBeInTheDocument()
+  expect(materialize(store.getSnapshot().present)).toEqual([])
+})
+
+test('promotes a value to a named header without changing the value', async () => {
+  const store = createEditorTestStore()
+  const screen = await render(<App store={store} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
+  await screen.getByRole('textbox', { name: 'Add value' }).fill('kept')
+  await userEvent.keyboard('{Enter}')
+  const value = screen.getByRole('treeitem', { name: 'string value' })
+  value.element().focus()
+
+  await screen.getByRole('button', { name: 'Promote value to header' }).click()
+  const caption = screen.getByRole('textbox', { name: 'Header caption' })
+  await caption.fill('title')
+  await userEvent.keyboard('{Enter}')
+
+  expect(materialize(store.getSnapshot().present)).toEqual({ title: 'kept' })
+  await expect
+    .element(screen.getByRole('treeitem', { name: 'title' }))
+    .toBeVisible()
+})
+
+test('previews a singleton value only while its header is collapsed', async () => {
+  const store = createEditorTestStore()
+  const screen = await render(<App store={store} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
   await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  await screen
+    .getByRole('textbox', { name: 'Add header caption' })
+    .fill('answer')
+  await userEvent.keyboard('{Enter}')
+  const header = screen.getByRole('treeitem', { name: 'answer' })
+  header.element().focus()
+  await userEvent.keyboard('{Enter}')
+  await screen.getByRole('textbox', { name: 'Add value' }).fill('42')
+  await userEvent.keyboard('{Enter}')
+
+  header.element().focus()
+  await userEvent.keyboard(' ')
+  await expect.element(header).toHaveTextContent('answer: 42')
+  const previewRow = header
+    .element()
+    .querySelector<HTMLElement>(':scope > .header-row')
+  expect(previewRow?.dataset.headerKind).toBeUndefined()
+  expect(previewRow).toHaveClass('has-primitive-preview')
+  await expect
+    .element(header)
+    .toHaveAccessibleDescription(/Collapsed value: 42/)
+  await userEvent.keyboard(' ')
+  await expect.element(header).not.toHaveTextContent('answer: 42')
+})
+
+test('adds a header from a fixed header composer', async () => {
+  const screen = await render(<App store={createEditorTestStore()} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  const rootComposer = screen.getByRole('textbox', {
+    name: 'Add header caption',
+  })
+  await rootComposer.fill('details')
+  await userEvent.keyboard('{Enter}')
 
   const header = screen.getByRole('treeitem', { name: 'details' })
   await expect.element(header).toHaveAttribute('aria-level', '2')
   await expect.element(header).toHaveAttribute('aria-expanded', 'true')
-  const composers = screen.getByRole('textbox', { name: 'Add value' }).all()
-  expect(composers).toHaveLength(2)
-  await expect.element(composers[1]!).toHaveFocus()
+  await expect.element(rootComposer).not.toBeInTheDocument()
+  await expect.element(header).toHaveFocus()
+  header
+    .element()
+    .querySelector('.tree-row')
+    ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+  await expect
+    .element(screen.getByRole('textbox', { name: 'Header caption' }))
+    .toHaveValue('details')
 })
 
 test('edits a primitive on Enter and cancels with Escape', async () => {
   const screen = await render(<App store={createEditorTestStore()} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('before')
   await userEvent.keyboard('{Enter}')
   const value = screen.getByRole('treeitem', { name: 'string value' })
   value.element().focus()
-  await userEvent.keyboard('{Enter}')
+  await userEvent.keyboard('{F2}')
   const editor = screen.getByRole('textbox', { name: 'Value source' })
   await editor.fill('after')
   await userEvent.keyboard('{Escape}')
@@ -75,7 +197,7 @@ test('edits a primitive on Enter and cancels with Escape', async () => {
   await expect.element(editor).not.toBeInTheDocument()
 
   value.element().focus()
-  await userEvent.keyboard('{Enter}')
+  await userEvent.keyboard('{F2}')
   const changedEditor = screen.getByRole('textbox', { name: 'Value source' })
   await changedEditor.fill('after')
   await screen.getByRole('button', { name: 'Formatting on' }).click()
@@ -88,10 +210,15 @@ test('uses visible preorder keyboard navigation', async () => {
   const root = screen.getByRole('treeitem', { name: 'Blank document' })
   root.element().focus()
   await userEvent.keyboard('{ArrowRight}')
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('first')
   await userEvent.keyboard('{Enter}')
-  await composer.fill('second')
+  const first = screen.getByRole('treeitem', { name: 'string value' })
+  first.element().focus()
+  await userEvent.keyboard('{Enter}')
+  const secondComposer = screen.getByRole('textbox', { name: 'Add value' })
+  await secondComposer.fill('second')
   await userEvent.keyboard('{Enter}')
   root.element().focus()
   await userEvent.keyboard(' ')
@@ -114,7 +241,10 @@ test('uses visible preorder keyboard navigation', async () => {
 
 test('duplicates, deletes, and restores mutations through undo', async () => {
   const screen = await render(<App store={createEditorTestStore()} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('kept')
   await userEvent.keyboard('{Enter}')
@@ -137,14 +267,17 @@ test('duplicates, deletes, and restores mutations through undo', async () => {
 test('undoes and redoes a committed add from the pristine composer', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('undo me')
   await userEvent.keyboard('{Enter}')
   await expect
     .element(screen.getByRole('treeitem', { name: 'string value' }))
     .toBeVisible()
-  await expect.element(composer).toHaveFocus()
+  await expect.element(composer).not.toBeInTheDocument()
 
   await userEvent.keyboard('{Control>}z{/Control}')
   await expect
@@ -161,7 +294,10 @@ test('undoes and redoes a committed add from the pristine composer', async () =>
 test('keeps document undo available from non-text controls', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('undo from toolbar')
   await userEvent.keyboard('{Enter}')
@@ -174,7 +310,10 @@ test('keeps document undo available from non-text controls', async () => {
 test('applies global and per-value formatting without losing type markers', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('2026-08-01')
   await userEvent.keyboard('{Enter}')
@@ -207,15 +346,44 @@ test('labels imported anonymous items without changing their JSON', async () => 
   await expect.element(second).toHaveTextContent('Item 2')
   await expect.element(first).toHaveAttribute('aria-level', '2')
   await expect.element(second).toHaveAttribute('aria-posinset', '2')
+  await expect
+    .element(screen.getByRole('treeitem', { name: 'Blank document' }))
+    .toHaveAccessibleDescription(/Reference Root.*Array header/)
+  expect(first.element().querySelector('.row-reference')?.textContent).toBe('1')
+  expect(second.element().querySelector('.row-reference')?.textContent).toBe(
+    '2',
+  )
+  const rootRow = screen
+    .getByRole('treeitem', { name: 'Blank document' })
+    .element()
+    .querySelector<HTMLElement>(':scope > .header-row')
+  const itemRow = first
+    .element()
+    .querySelector<HTMLElement>(':scope > .header-row')
+  expect(rootRow?.dataset.headerKind).toBe('array')
+  expect(itemRow?.dataset.headerKind).toBe('object')
+  expect(
+    second.element().querySelector<HTMLElement>(':scope > .header-row')?.dataset
+      .headerKind,
+  ).toBe('object')
+  expect(rootRow?.dataset.depthTone).toBe('0')
+  expect(itemRow?.dataset.depthTone).toBe('1')
+  expect(rootRow?.querySelector('.header-shape')).toBeNull()
+  await first.click()
+  const a = screen.getByRole('treeitem', { name: 'a', exact: true })
+  expect(a.element().querySelector('.row-reference')?.textContent).toBe('1.A')
   expect(materialize(store.getSnapshot().present)).toEqual([{ a: 1 }, { b: 2 }])
 })
 
 test('single-click selection preserves boolean presentation and row geometry', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
-  const composer = screen.getByRole('textbox', { name: 'Add value' })
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
   for (const value of ['true', 'other']) {
+    await userEvent.keyboard('{Enter}')
+    const composer = screen.getByRole('textbox', { name: 'Add value' })
     await composer.fill(value)
     await userEvent.keyboard('{Enter}')
   }
@@ -251,19 +419,20 @@ test('single-click selection preserves boolean presentation and row geometry', a
   await expect.element(screen.getByText('TRUE', { exact: true })).toBeVisible()
 })
 
-test('clears uncommitted drafts without hiding composers', async () => {
+test('cancels transient composers on blur and Escape', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
   const root = screen.getByRole('treeitem', { name: 'Blank document' })
   await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   let composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('discard me')
   const formatting = screen.getByRole('button', { name: 'Formatting on' })
   const formattingElement = formatting.element()
   await formatting.click()
 
-  await expect.element(composer).toBeInTheDocument()
-  await expect.element(composer).toHaveValue('')
+  await expect.element(composer).not.toBeInTheDocument()
   expect(globalThis.document.activeElement).toBe(formattingElement)
   expect(materialize(store.getSnapshot().present)).toEqual([])
 
@@ -272,8 +441,7 @@ test('clears uncommitted drafts without hiding composers', async () => {
   composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('discard again')
   await userEvent.keyboard('{Escape}')
-  await expect.element(composer).toBeInTheDocument()
-  await expect.element(composer).toHaveValue('')
+  await expect.element(composer).not.toBeInTheDocument()
   await expect.element(root).toHaveFocus()
   expect(materialize(store.getSnapshot().present)).toEqual([])
 })
@@ -281,8 +449,11 @@ test('clears uncommitted drafts without hiding composers', async () => {
 test('adds an untouched composer as a neutral blank header', async () => {
   const neutralStore = createEditorTestStore()
   const neutral = await render(<App store={neutralStore} />)
-  await neutral.getByRole('treeitem', { name: 'Blank document' }).click()
-  await neutral.getByRole('button', { name: 'Add header' }).click()
+  const root = neutral.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  await userEvent.keyboard('{Enter}')
   await expect
     .element(neutral.getByRole('treeitem', { name: 'Blank header' }))
     .toBeVisible()
@@ -292,59 +463,65 @@ test('adds an untouched composer as a neutral blank header', async () => {
 test('renders an intentionally empty caption distinctly', async () => {
   const emptyStore = createEditorTestStore()
   const empty = await render(<App store={emptyStore} />)
-  await empty.getByRole('treeitem', { name: 'Blank document' }).click()
-  const composer = empty.getByRole('textbox', { name: 'Add value' })
+  const root = empty.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  const composer = empty.getByRole('textbox', { name: 'Add header caption' })
   await composer.fill('x')
   await composer.fill('')
-  await empty.getByRole('button', { name: 'Add header' }).click()
+  await userEvent.keyboard('{Enter}')
   await expect
     .element(empty.getByRole('treeitem', { name: 'Empty caption header' }))
     .toHaveTextContent('""')
   expect(materialize(emptyStore.getSnapshot().present)).toEqual({ '': [] })
 })
 
-test('clears a draft after tabbing through the Header action', async () => {
-  const store = createEditorTestStore()
-  const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
-  const composer = screen.getByRole('textbox', { name: 'Add value' })
-  await composer.fill('uncommitted')
-  await userEvent.keyboard('{Tab}')
-  await expect
-    .element(screen.getByRole('button', { name: 'Add header' }))
-    .toHaveFocus()
-  await userEvent.keyboard('{Tab}')
-
-  await expect.element(composer).toBeInTheDocument()
-  await expect.element(composer).toHaveValue('')
-  expect(materialize(store.getSnapshot().present)).toEqual([])
-})
-
-test('keeps root and nested composers attached to their owning headers', async () => {
+test('cancels a transient composer when focus leaves it', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
   const root = screen.getByRole('treeitem', { name: 'Blank document' })
   await root.click()
-  const rootComposer = directComposer(root.element())
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
+  const composer = screen.getByRole('textbox', { name: 'Add value' })
+  await composer.fill('uncommitted')
+  await userEvent.keyboard('{Tab}')
 
+  await expect.element(composer).not.toBeInTheDocument()
+  expect(materialize(store.getSnapshot().present)).toEqual([])
+})
+
+test('renders only one requested composer at its contextual insertion slot', async () => {
+  const store = createEditorTestStore()
+  const screen = await render(<App store={store} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  await expect
+    .element(screen.getByRole('textbox', { name: 'Add value' }))
+    .not.toBeInTheDocument()
+  root.element().focus()
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  let rootComposer = directComposer(root.element())
   await userEvent.fill(rootComposer, 'first')
-  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
-  await userEvent.fill(rootComposer, 'second')
-  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
-
+  await userEvent.keyboard('{Enter}')
   const first = screen.getByRole('treeitem', { name: 'first', exact: true })
+  root.element().focus()
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  rootComposer = directComposer(root.element())
+  await userEvent.fill(rootComposer, 'second')
+  await userEvent.keyboard('{Enter}')
+
   const second = screen.getByRole('treeitem', { name: 'second', exact: true })
-  expect(root.element().children[1]).toHaveClass('add-composer')
-  expect(first.element().children[1]).toHaveClass('add-composer')
-  expect(second.element().children[1]).toHaveClass('add-composer')
-
+  first.element().focus()
+  await userEvent.keyboard('{Enter}')
   const firstComposer = directComposer(first.element())
-  await userEvent.fill(firstComposer, 'discard nested draft')
-  await screen.getByRole('button', { name: 'Formatting on' }).click()
-  await expect.element(firstComposer).toBeInTheDocument()
-  await expect.element(firstComposer).toHaveValue('')
-
+  expect(screen.getByRole('textbox', { name: 'Add value' }).all()).toHaveLength(
+    1,
+  )
   await userEvent.fill(firstComposer, 'one')
+  await userEvent.keyboard('{Enter}')
+  second.element().focus()
   await userEvent.keyboard('{Enter}')
   await userEvent.fill(directComposer(second.element()), 'two')
   await userEvent.keyboard('{Enter}')
@@ -360,14 +537,16 @@ test('reports duplicate caption errors without changing the document', async () 
   const screen = await render(<App store={store} />)
   const root = screen.getByRole('treeitem', { name: 'Blank document' })
   await root.click()
-  const rootComposer = root
-    .element()
-    .querySelector<HTMLInputElement>(':scope > .add-composer input')
-  if (!rootComposer) throw new Error('Missing root composer')
+  root.element().focus()
+  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  let rootComposer = directComposer(root.element())
   await userEvent.fill(rootComposer, 'a')
+  await userEvent.keyboard('{Enter}')
+  root.element().focus()
   await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  rootComposer = directComposer(root.element())
   await userEvent.fill(rootComposer, 'b')
-  await userEvent.keyboard('{Alt>}{Enter}{/Alt}')
+  await userEvent.keyboard('{Enter}')
   const b = screen.getByRole('treeitem', { name: 'b', exact: true })
   b.element().focus()
   await userEvent.keyboard('{F2}')
@@ -392,9 +571,12 @@ function directComposer(treeItem: Element): HTMLInputElement {
 
 test('renders and edits the complete primitive presentation set', async () => {
   const screen = await render(<App store={createEditorTestStore()} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
-  const composer = screen.getByRole('textbox', { name: 'Add value' })
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
   for (const value of ['true', 'null', '', '2026-08-01T12:30:00Z']) {
+    await userEvent.keyboard('{Enter}')
+    const composer = screen.getByRole('textbox', { name: 'Add value' })
     await composer.fill(value)
     await userEvent.keyboard('{Enter}')
   }
@@ -419,7 +601,10 @@ test('renders and edits the complete primitive presentation set', async () => {
 test('exposes value descriptions and keyboard-operable formatting controls', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('2026-08-01')
   await userEvent.keyboard('{Enter}')
@@ -444,13 +629,16 @@ test('exposes value descriptions and keyboard-operable formatting controls', asy
 test('restores the wrapped value focus when undo removes its wrapper', async () => {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
+  await userEvent.keyboard('{Enter}')
   const composer = screen.getByRole('textbox', { name: 'Add value' })
   await composer.fill('1')
   await userEvent.keyboard('{Enter}')
   const value = screen.getByRole('treeitem', { name: 'number value' })
   value.element().focus()
-  await screen.getByRole('button', { name: 'Wrap item' }).click()
+  await screen.getByRole('button', { name: 'Promote value to header' }).click()
   await expect
     .element(screen.getByRole('textbox', { name: 'Header caption' }))
     .toHaveValue('new')

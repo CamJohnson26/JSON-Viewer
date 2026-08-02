@@ -70,6 +70,41 @@ function apply(
 }
 
 describe('semantic command compilation', () => {
+  test('inserts new rows at a validated position', () => {
+    const document = fixture('[1,3]')
+    const result = compileCommand(
+      document,
+      0,
+      command({
+        type: 'primitive.add',
+        parentId: document.rootId,
+        index: 1,
+        sourceInput: '2',
+      }),
+      context(),
+    )
+    if (!result.ok || result.status !== 'applied')
+      throw new Error('Expected indexed insertion')
+    const updated = applyTransaction(document, result.transaction)
+    expect(materialize(updated)).toEqual([1, 2, 3])
+    expect(
+      applyTransaction(updated, invertTransaction(result.transaction)),
+    ).toEqual(document)
+    expect(
+      compileCommand(
+        document,
+        0,
+        command({
+          type: 'header.add',
+          parentId: document.rootId,
+          index: 3,
+          caption: 'late',
+        }),
+        context(),
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'InvalidPayload' } })
+  })
+
   test('adds and edits primitives and headers, then renames and removes a subtree', () => {
     const start = fixture('[]')
     const sharedContext = context()

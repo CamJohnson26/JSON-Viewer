@@ -237,120 +237,139 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
     - 2026-08-01: Added from `docs/feedback-2026-08-01T21-04-22-05-00.md` and prioritized as data-integrity and primary-interaction work.
     - 2026-08-01: Confirmed undo was row-scoped, active values switched presentation, active-only controls changed layout, and imported object elements were valid anonymous wrappers with blank presentation. Added document undo/redo from pristine composers and non-text controls while preserving native draft undo; ordinal imported-item labels; stable formatted boolean selection; inert geometry-preserving controls; explicit undoable boolean toggle coverage; and desktop/240px row-geometry regressions. The full 178-test and 5-E2E gate passes.
 
-47. **[TODO] Rework direct editing and header creation**
-    **Acceptance:** Typing on a focused editable row starts editing, `Enter` provides a non-distracting row-add flow, header creation cannot be accidentally committed as a value, and a value can be promoted to a header without data loss. Root and nested keyboard/pointer workflows are discoverable and browser-tested.
+47. **[DONE] Rework direct editing and header creation**
+    **Acceptance:** Expanded headers do not render persistent add rows. `Enter` and an applicable menu action open exactly one contextual add session beneath a value or inside a header; blur/Escape cancel without mutation. Typing on a focused editable row starts editing, header creation cannot be accidentally committed as a value, and a value can be promoted to a header without data loss. Root and nested keyboard/pointer workflows are discoverable and browser-tested.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback; supersedes treating the current value-first composer as final UX.
+    - 2026-08-01: Urgent follow-up requires replacing repeated composers with one keyboard/menu-driven insertion session and making primitive promotion a first-class action.
+    - 2026-08-01: Replaced persistent composers with one contextual indexed insertion session opened by `Enter`, `Alt+Enter`, menu, or palette; blur/Escape cancel atomically. Added direct typing/F2 editing, fixed-kind header creation, lossless primitive promotion, history-safe session cleanup, indexed command inversion, and keyboard/menu/browser coverage.
+    - 2026-08-01: Added pointer parity: double-clicking any non-root header now opens caption editing while preserving root behavior and keyboard alternatives.
 
-48. **[TODO] Improve at-a-glance hierarchy context**
-    **Acceptance:** The focused row communicates its parent without indentation, and collapsed headers show a concise inline key/value preview where content permits. Long and nested values remain readable at narrow widths without exposing internal container terminology.
+48. **[DONE] Improve at-a-glance hierarchy context**
+    **Acceptance:** The focused row communicates its parent without indentation, and a collapsed captioned header with one primitive child shows a concise inline key/value preview. Expanded, multi-value, nested, anonymous, and empty headers do not duplicate hidden content. Long values remain readable and accessible at narrow widths.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback about unclear parentage and opaque collapsed headers.
+    - 2026-08-01: Added formatted collapsed previews for captioned singleton primitive headers, full generated ancestry references, accessible descriptions, and narrow-width coverage without duplicating expanded or non-scalar content.
 
-49. **[TODO] Add context-menu search**
+49. **[DONE] Add generated hierarchical row references**
+    **Acceptance:** Every rendered document row has a deterministic left-side reference. Children of keyed parents use spreadsheet letters, children of ordered parents use one-based numbers, and segments compose as `A.1.B`; root uses `Root`. References update after structural changes, are not persisted or copied as JSON, and remain accessible at narrow widths.
+    **Log (append-only):**
+    - 2026-08-01: Added as urgent product direction; generated A/1 paths were explicitly selected over actual-key paths.
+    - 2026-08-01: Added pure spreadsheet-letter and one-based ordered segments to the memoized visible projection, rendered `Root`/`A.1.B` gutters for every row, and verified mixed hierarchies, post-Z columns, imported wrappers, accessibility, and structural recomputation.
+
+50. **[DONE] Add accessible kind and depth header styling**
+    **Acceptance:** Keyed and ordered headers use distinct accessible colors, with a bounded shade progression by hierarchy level. Visible non-color labels and accessible descriptions identify each shape; neutral and single-value headers remain distinct; selection, focus, text, badges, and counts meet contrast requirements.
+    **Log (append-only):**
+    - 2026-08-01: Added as urgent product direction and resolves the prior undecided request for array/object-specific header color coding.
+    - 2026-08-01: Added distinct orange object and blue array header families, bounded six-level shade cycling, neutral/single states, visible non-color shape badges, accessible descriptions, and selection-aware backgrounds. Verified all configured text/selected/focus contrast combinations exceed 4.5:1/3:1 targets.
+    - 2026-08-01: Correction after visual review: removed visible Object/Array badges as redundant while retaining non-color shape information in accessible descriptions. Scoped striping to primitive-like rows, made object/array colors override row alternation at every position, excluded collapsed primitive previews from shape colors, and replaced the oversized text chevron with a compact CSS triangle.
+
+51. **[DONE] Configure GitHub Pages deployment**
+    **Acceptance:** Vite builds for `https://camjohnson26.github.io/JSON-Viewer/`, a least-privilege GitHub Actions workflow deploys `dist` from `master` and supports manual dispatch, and the README documents local commands plus exact Pages setup/deploy instructions. Local development and automated browser tests remain functional.
+    **Log (append-only):**
+    - 2026-08-01: Added as urgent product direction for the existing `CamJohnson26/JSON-Viewer` remote; no custom domain is assumed.
+    - 2026-08-01: Added environment-gated `/JSON-Viewer/` Vite assets, a least-privilege `master`/manual Pages workflow, and README setup/deploy/private-repository guidance. Verified the Pages build emits project-site asset URLs while local builds and Chrome tests retain root-base behavior.
+
+52. **[TODO] Add context-menu search**
     **Acceptance:** The keyboard and pointer context menu can filter its currently applicable actions without losing menu semantics, focus restoration, disabled-state explanations, or command-palette parity.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback and placed before further I/O work because the action catalog is already large.
 
-50. **[TODO] Add key naming and bulk-copy utilities**
+53. **[TODO] Add key naming and bulk-copy utilities**
     **Acceptance:** Selected captions can convert predictably among snake case, camel case, and spaced words with collision detection and one undoable transaction. Copy-all-captions and copy-all-values produce deterministic valid JSON without mutating the document.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback; UI terminology uses captions rather than object/key model jargon.
 
-51. **[TODO] Add modifier-based bulk expansion**
+54. **[TODO] Add modifier-based bulk expansion**
     **Acceptance:** Holding the approved Option/Alt modifier while expanding or collapsing applies the same state to descendants, does not trigger browser navigation, preserves visible roving focus, and is documented and tested on the supported Chrome target.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback; exact browser-safe event handling remains an implementation concern.
 
-52. **[TODO] Implement graphical JSON file import and export**
+55. **[TODO] Implement graphical JSON file import and export**
     **Acceptance:** Strict JSON files can populate the graphical editor, and current canonical JSON can download as a file. There is no raw JSON editing surface; errors never replace the current document.
     **Log (append-only):**
 
-53. **[TODO] Implement the versioned URL codec**
+56. **[TODO] Implement the versioned URL codec**
     **Acceptance:** Canonical JSON round-trips through a compressed Base64URL payload shaped as `?v=1&d=...`, with typed version, corruption, and decompression errors and no server dependency.
     **Log (append-only):**
 
-54. **[TODO] Load and recover URL document state**
+57. **[TODO] Load and recover URL document state**
     **Acceptance:** A missing payload loads the blank root, a valid payload loads its document, and an invalid payload preserves the URL while presenting a recoverable error without executing imported content.
     **Log (append-only):**
 
-55. **[TODO] Persist revisions to the URL**
+58. **[TODO] Persist revisions to the URL**
     **Acceptance:** Debounced `history.replaceState` writes do not create per-keystroke history entries. Success updates `urlSavedRevision`; oversized payloads or API failures preserve in-memory edits and visibly mark them unsaved.
     **Log (append-only):**
 
-56. **[TODO] Implement share URL and reset actions**
+59. **[TODO] Implement share URL and reset actions**
     **Acceptance:** Copy share URL reflects the latest URL-saved revision. New/reset requests confirmation only when the current revision is not represented in the URL.
     **Log (append-only):**
 
-57. **[TODO] Implement the compact editor status surface**
+60. **[TODO] Implement the compact editor status surface**
     **Acceptance:** A non-banner status area reports current path, selection count, inline errors, and URL persistence state without exposing inferred object/array kinds.
     **Log (append-only):**
 
-58. **[TODO] Add input and resource-exhaustion guards**
+61. **[TODO] Add input and resource-exhaustion guards**
     **Acceptance:** URL, clipboard, and file inputs are treated as untrusted. Decompression and recursive operations fail safely before blocking the client, without imposing an arbitrary normal-document product limit.
     **Log (append-only):**
 
-59. **[TODO] Add a cancellable Web Worker boundary**
+62. **[TODO] Add a cancellable Web Worker boundary**
     **Acceptance:** Expensive non-interactive parsing, compression, diffing, or bulk work can use a versioned, cancellation-aware worker protocol, and stale results cannot overwrite newer revisions. Only measured tasks are moved into it.
     **Log (append-only):**
 
-60. **[TODO] Add threshold-based visible-item virtualization**
+63. **[TODO] Add threshold-based visible-item virtualization**
     **Acceptance:** Local profiling establishes a row-count threshold. Documents below it use direct rendering; larger visible projections virtualize while preserving focus, selection, expansion, accessibility, and navigation commands.
     **Log (append-only):**
 
-61. **[TODO] Complete domain and operation test coverage**
+64. **[TODO] Complete domain and operation test coverage**
     **Acceptance:** Every pure operation, typed failure, event inverse, replay path, strict JSON boundary, URL codec case, copy/paste context, and resource guard has focused automated coverage.
     **Log (append-only):**
 
-62. **[TODO] Complete browser interaction tests**
+65. **[TODO] Complete browser interaction tests**
     **Acceptance:** Latest-Chrome tests cover the blank start, editing and inference sequences, undo/redo, keyboard navigation and movement, selection, clipboard behavior, menus, palette, file I/O, URL persistence, and recovery.
     **Log (append-only):**
 
-63. **[TODO] Complete the accessibility audit**
+66. **[TODO] Complete the accessibility audit**
     **Acceptance:** Automated and manual checks cover semantics, focus order and restoration, full keyboard operation, contrast, non-color state indicators, errors, and `prefers-reduced-motion`; critical findings are fixed.
     **Log (append-only):**
 
-64. **[TODO] Profile and tune production performance**
+67. **[TODO] Profile and tune production performance**
     **Acceptance:** Repeatable local fixtures measure small, medium, and large documents in a production build. Leaf edits meet the one-frame target for normal documents, navigation has no visible lag, and memory growth tracks document plus retained history.
     **Log (append-only):**
 
-65. **[TODO] Decide whether any measured hot path requires WASM**
+68. **[TODO] Decide whether any measured hot path requires WASM**
     **Acceptance:** Record profiling evidence and either keep TypeScript/Workers or add a narrow WASM boundary that demonstrably improves a critical operation after transfer and loading costs. Unjustified WASM work is marked `LOST`, not implemented speculatively.
     **Log (append-only):**
 
-66. **[TODO] Validate the latest stable Chrome release target**
+69. **[TODO] Validate the latest stable Chrome release target**
     **Acceptance:** The production build passes all supported workflows in the latest stable Chrome, uses standards-based browser APIs where available, and has no backend, SSR, analytics, local storage, or IndexedDB dependency.
     **Log (append-only):**
 
-67. **[TODO] Write the project README**
-    **Acceptance:** The repository README explains the product scope, local requirements, install/development/test/build commands, graphical-only editing model, keyboard entry points, browser target, and known limitations without claiming unfinished features.
-    **Log (append-only):**
-    - 2026-08-01: Added from product feedback and scheduled before release preparation.
-
-68. **[TODO] Rethink the editor component file structure**
+70. **[TODO] Rethink the editor component file structure**
     **Acceptance:** Review `EditorTree.tsx` after feature work is complete and split it into cohesive components and interaction modules with clear ownership. Preserve behavior, accessibility, focus semantics, and performance; avoid fragmentation into trivial wrapper files.
     **Log (append-only):**
 
-69. **[TODO] [HUMAN ATTENTION] Decide the visual language and editor chrome**
-    **Acceptance:** A human-approved direction resolves whether to remove formatting and undo/redo buttons, primitive indicators, node-count badges, and repeated disclosure icons; defines header color coding; and specifies the requested gray, white, and orange palette. Record the decision before implementation and verify contrast, focus, selection, and responsive stability.
+71. **[TODO] [HUMAN ATTENTION] Decide the remaining editor chrome**
+    **Acceptance:** A human-approved direction resolves whether to remove formatting and undo/redo buttons, primitive indicators, node-count badges, and repeated disclosure icons, and whether the broader gray, white, and orange palette still applies alongside the approved keyed/ordered header colors. Record the decision before implementation and verify contrast, focus, selection, and responsive stability.
     **Log (append-only):**
     - 2026-08-01: Flagged because multiple visual comments are directionally clear but require a coherent design decision rather than independent removals.
+    - 2026-08-01: Keyed/ordered header colors and level shading were explicitly approved and moved into item 50; remaining chrome and global palette choices still require review.
 
-70. **[TODO] [HUMAN ATTENTION] Decide which actions remain visible**
+72. **[TODO] [HUMAN ATTENTION] Decide which actions remain visible**
     **Acceptance:** Confirm whether rename, duplicate, and related features should be removed entirely, removed only from inline row controls, or retained in menus/palette. Record the V1 action surface and update tests and documentation without silently deleting domain capability.
     **Log (append-only):**
     - 2026-08-01: Flagged because the feedback conflicts with previously approved and completed V1 operations.
 
-71. **[TODO] [HUMAN ATTENTION] Decide empty collection representation**
+73. **[TODO] [HUMAN ATTENTION] Decide empty collection representation**
     **Acceptance:** Decide whether and how users explicitly distinguish empty ordered and keyed collections on a header while preserving the no-jargon interface and deterministic inference contract. Update the inference specification before changing persisted behavior.
     **Log (append-only):**
     - 2026-08-01: Flagged because an explicit empty-kind choice changes the approved kind-neutral inference contract.
 
-72. **[TODO] [HUMAN ATTENTION] Decide default paste semantics**
+74. **[TODO] [HUMAN ATTENTION] Decide default paste semantics**
     **Acceptance:** Decide whether ordinary paste replaces the full selection/document, replaces the focused value, or retains contextual into/beside insertion. Document examples for root, header, primitive, multi-selection, and active editing before changing commands or UI.
     **Log (append-only):**
     - 2026-08-01: Flagged because replace-by-default feedback conflicts with the completed contextual paste contract.
 
-73. **[TODO] Prepare the V1 release**
+75. **[TODO] Prepare the V1 release**
     **Acceptance:** Type checking, linting, automated tests, and production build pass; release behavior matches the resolved V1 scope and human-attention decisions; deferred features remain absent; known limitations and any `LOST` schedule items are recorded without rewriting history.
     **Log (append-only):**

@@ -9,9 +9,12 @@ import { App } from './App.tsx'
 async function editorWithValues(values: readonly string[]) {
   const store = createEditorTestStore()
   const screen = await render(<App store={store} />)
-  await screen.getByRole('treeitem', { name: 'Blank document' }).click()
-  const composer = screen.getByRole('textbox', { name: 'Add value' })
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  await root.click()
+  root.element().focus()
   for (const value of values) {
+    await userEvent.keyboard('{Enter}')
+    const composer = screen.getByRole('textbox', { name: 'Add value' })
     await composer.fill(value)
     await userEvent.keyboard('{Enter}')
   }
@@ -80,6 +83,24 @@ test('opens the shared menu from the keyboard and restores row focus', async () 
   await expect.element(value).toHaveFocus()
 })
 
+test('opens a contextual add row from the menu beneath a value', async () => {
+  const { screen, store } = await editorWithValues(['first', 'third'])
+  const values = screen.getByRole('treeitem', { name: 'string value' }).all()
+  values[0]!
+    .element()
+    .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
+  await screen.getByRole('menuitem', { name: 'Add row' }).click()
+  const composer = screen.getByRole('textbox', { name: 'Add value' })
+  await composer.fill('second')
+  await userEvent.keyboard('{Enter}')
+
+  expect(materialize(store.getSnapshot().present)).toEqual([
+    'first',
+    'second',
+    'third',
+  ])
+})
+
 test('searches the palette, applies a parameterized operation, and avoids model jargon', async () => {
   const { screen, store } = await editorWithValues(['  before  '])
   const value = screen.getByRole('treeitem', { name: 'string value' })
@@ -94,7 +115,7 @@ test('searches the palette, applies a parameterized operation, and avoids model 
   expect(materialize(store.getSnapshot().present)).toEqual(['  after  '])
 
   const visibleText = document.body.innerText.toLowerCase()
-  expect(visibleText).not.toMatch(/\b(object|array|container|collection|key)\b/)
+  expect(visibleText).not.toMatch(/\b(container|collection|key)\b/)
 })
 
 test('keeps parameter dialogs open with an inline error', async () => {
@@ -122,7 +143,7 @@ test('runs add-header as a header workflow', async () => {
   await screen
     .getByRole('textbox', { name: 'Search commands' })
     .fill('nested header')
-  await screen.getByRole('option', { name: 'Add nested header' }).click()
+  await screen.getByRole('option', { name: 'Add header' }).click()
   const composer = screen.getByRole('textbox', { name: 'Add header caption' })
   await composer.fill('details')
   await userEvent.keyboard('{Enter}')
@@ -137,7 +158,7 @@ test('replaces an actively edited value from JSON paste and shows invalid paste 
   const { screen, store } = await editorWithValues(['before'])
   const value = screen.getByRole('treeitem', { name: 'string value' })
   value.element().focus()
-  await userEvent.keyboard('{Enter}')
+  await userEvent.keyboard('{F2}')
   const editor = screen.getByRole('textbox', { name: 'Value source' })
   const invalid = new DataTransfer()
   invalid.setData('text/plain', '{')
@@ -166,15 +187,15 @@ test('keeps roving focus visible when collapsing all headers', async () => {
   await screen
     .getByRole('textbox', { name: 'Search commands' })
     .fill('nested header')
-  await screen.getByRole('option', { name: 'Add nested header' }).click()
+  await screen.getByRole('option', { name: 'Add header' }).click()
   await screen
     .getByRole('textbox', { name: 'Add header caption' })
     .fill('details')
   await userEvent.keyboard('{Enter}')
-  const childComposer = screen
-    .getByRole('textbox', { name: 'Add value' })
-    .all()
-    .at(-1)!
+  const header = screen.getByRole('treeitem', { name: 'details' })
+  header.element().focus()
+  await userEvent.keyboard('{Enter}')
+  const childComposer = screen.getByRole('textbox', { name: 'Add value' })
   await childComposer.fill('inside')
   await userEvent.keyboard('{Enter}')
   const child = screen.getByRole('treeitem', { name: 'string value' })
