@@ -78,3 +78,48 @@ test('completes a selection clipboard menu and palette workflow', async ({
   await page.getByRole('option', { name: 'Trim text' }).click()
   await expect(page.getByText('first', { exact: true }).first()).toBeVisible()
 })
+
+test('undoes an add while the empty composer retains focus', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.getByRole('treeitem', { name: 'Blank document' }).click()
+  const composer = page.getByRole('textbox', { name: 'Add value' })
+  await composer.fill('undo me')
+  await composer.press('Enter')
+  await expect(
+    page.getByRole('treeitem', { name: 'string value' }),
+  ).toBeVisible()
+  await expect(composer).toBeFocused()
+
+  await page.keyboard.press('Control+Z')
+  await expect(
+    page.getByRole('treeitem', { name: 'string value' }),
+  ).not.toBeAttached()
+})
+
+test('keeps row geometry stable when selection moves at narrow width', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 240, height: 640 })
+  await page.goto('/')
+  await page.getByRole('treeitem', { name: 'Blank document' }).click()
+  const composer = page.getByRole('textbox', { name: 'Add value' })
+  for (const value of ['first', 'second']) {
+    await composer.fill(value)
+    await composer.press('Enter')
+  }
+  const values = page.getByRole('treeitem', { name: 'string value' })
+  const before = await Promise.all([
+    values.nth(0).locator(':scope > .tree-row').boundingBox(),
+    values.nth(1).locator(':scope > .tree-row').boundingBox(),
+  ])
+
+  await values.nth(0).click()
+
+  const after = await Promise.all([
+    values.nth(0).locator(':scope > .tree-row').boundingBox(),
+    values.nth(1).locator(':scope > .tree-row').boundingBox(),
+  ])
+  expect(after).toEqual(before)
+})

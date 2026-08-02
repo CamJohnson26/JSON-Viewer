@@ -231,10 +231,11 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
     - 2026-08-01: Moved ahead of file and URL work after timestamped product feedback reported disappearing add controls and nested additions grouping at the bottom.
     - 2026-08-01: Reproduced both defects. Composers now remain available after abandoned blur/Escape, clear uncommitted drafts, render directly beneath their owning header before descendants, and retain deterministic focus after value/header commits. Added root/nested placement, blur, cancellation, keyboard, pointer, and narrow-screen browser coverage; the full 174-test and 3-E2E gate passes.
 
-46. **[TODO] Repair reported core interaction regressions**
+46. **[DONE] Repair reported core interaction regressions**
     **Acceptance:** Reproduce and fix non-working `Ctrl/Cmd+Z`, array-of-objects imports that render an unintended empty header, vertical layout shifts on selection, and boolean clicks that unexpectedly change presentation. Single click only selects; any boolean toggle behavior is explicit, undoable, and browser-tested.
     **Log (append-only):**
     - 2026-08-01: Added from `docs/feedback-2026-08-01T21-04-22-05-00.md` and prioritized as data-integrity and primary-interaction work.
+    - 2026-08-01: Confirmed undo was row-scoped, active values switched presentation, active-only controls changed layout, and imported object elements were valid anonymous wrappers with blank presentation. Added document undo/redo from pristine composers and non-text controls while preserving native draft undo; ordinal imported-item labels; stable formatted boolean selection; inert geometry-preserving controls; explicit undoable boolean toggle coverage; and desktop/240px row-geometry regressions. The full 178-test and 5-E2E gate passes.
 
 47. **[TODO] Rework direct editing and header creation**
     **Acceptance:** Typing on a focused editable row starts editing, `Enter` provides a non-distracting row-add flow, header creation cannot be accidentally committed as a value, and a value can be promoted to a header without data loss. Root and nested keyboard/pointer workflows are discoverable and browser-tested.

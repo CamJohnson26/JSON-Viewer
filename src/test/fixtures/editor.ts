@@ -1,4 +1,8 @@
-import { createBlankDocument, nodeId } from '../../domain/document/index.ts'
+import {
+  createBlankDocument,
+  nodeId,
+  type JsonDocument,
+} from '../../domain/document/index.ts'
 import { createDocumentStore, type DocumentStore } from '../../state/store.ts'
 
 export const editorLabels = {
@@ -6,9 +10,11 @@ export const editorLabels = {
   status: 'Editor status',
 } as const
 
-export function createEditorTestStore(): DocumentStore {
+export function createEditorTestStore(
+  document: JsonDocument = createBlankDocument(nodeId('root')),
+): DocumentStore {
   let sequence = 0
-  return createDocumentStore(createBlankDocument(nodeId('root')), {
+  return createDocumentStore(document, {
     createId: () => nodeId(`node-${++sequence}`),
     createEventMetadata: () => ({
       eventId: `event-${sequence}`,

@@ -5,6 +5,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   useEffect,
+  useEffectEvent,
   useId,
   useMemo,
   useRef,
@@ -378,6 +379,25 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
   const undo = (): void => moveHistory('undo')
   const redo = (): void => moveHistory('redo')
 
+  const runHistoryShortcut = useEffectEvent((direction: 'undo' | 'redo') => {
+    moveHistory(direction)
+  })
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (
+        event.defaultPrevented ||
+        isTextEntry(event.target) ||
+        (!event.ctrlKey && !event.metaKey) ||
+        event.key.toLowerCase() !== 'z'
+      )
+        return
+      event.preventDefault()
+      runHistoryShortcut(event.shiftKey ? 'redo' : 'undo')
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   const navigate = (event: KeyboardEvent<HTMLElement>, id: NodeId): void => {
     const node = document.nodes[id]
     if (!node || event.target !== event.currentTarget) return
@@ -725,8 +745,10 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
             onSelect={selectFromPointer}
             onEditIdle={idleEdit}
             onNavigate={navigate}
+            onRedo={redo}
             onSetFormatting={setFormatting}
             onToggle={toggleContainer}
+            onUndo={undo}
             onUnwrap={(id) => mutate('header.unwrap', id, 'Header unwrapped')}
             headerComposerId={headerComposerId}
             onDismissComposer={dismissComposer}
@@ -772,6 +794,8 @@ interface TreeItemProps {
   readonly onEditIdle: (id: NodeId) => void
   readonly onToggle: (id: NodeId) => void
   readonly onNavigate: (event: KeyboardEvent<HTMLElement>, id: NodeId) => void
+  readonly onUndo: () => void
+  readonly onRedo: () => void
   readonly onBeginEdit: (node: UiDocumentNode) => void
   readonly onCommitEdit: (value: string) => void
   readonly onCancelEdit: () => void
@@ -798,12 +822,19 @@ function TreeItem(props: TreeItemProps) {
   const selected = props.selectedIds.includes(node.id)
   const isExpanded = node.type === 'container' && props.expanded.has(node.id)
   const editing = props.edit?.targetId === node.id
+  const anonymousLabel =
+    node.type === 'container' &&
+    node.id !== props.document.rootId &&
+    node.caption === null &&
+    node.kindOrigin === 'imported'
+      ? `Item ${props.position}`
+      : null
   const label =
     node.type === 'container'
       ? node.id === props.document.rootId
         ? 'Blank document'
         : node.caption === null
-          ? 'Blank header'
+          ? (anonymousLabel ?? 'Blank header')
           : node.caption === ''
             ? 'Empty caption header'
             : node.caption
@@ -814,7 +845,7 @@ function TreeItem(props: TreeItemProps) {
     props.pasteError?.id === node.id ? props.pasteError.message : null
   const descriptionId = `kind-${node.id}`
 
-  const actions = active ? (
+  const actions = (
     <span aria-label="Item actions" className="row-actions">
       {node.type === 'container' && node.id !== props.document.rootId && (
         <button
@@ -891,7 +922,27 @@ function TreeItem(props: TreeItemProps) {
         </button>
       )}
     </span>
-  ) : null
+  )
+  const formattingActions =
+    node.type === 'primitive' ? (
+      <span
+        aria-label="Value formatting"
+        className="format-controls"
+        onClick={(event) => event.stopPropagation()}
+        role="group"
+      >
+        {(['inherit', 'formatted', 'source'] as const).map((formatting) => (
+          <button
+            aria-pressed={node.formatting === formatting}
+            key={formatting}
+            onClick={() => props.onSetFormatting(node.id, formatting)}
+            type="button"
+          >
+            {formatting}
+          </button>
+        ))}
+      </span>
+    ) : null
 
   return (
     <div
@@ -933,6 +984,7 @@ function TreeItem(props: TreeItemProps) {
       >
         {node.type === 'container' ? (
           <HeaderContent
+            anonymousLabel={anonymousLabel}
             editing={editing}
             error={props.editError}
             errorId={errorId}
@@ -945,7 +997,6 @@ function TreeItem(props: TreeItemProps) {
           />
         ) : (
           <PrimitiveContent
-            active={active}
             editing={editing}
             error={props.editError ?? nodePasteError}
             errorId={errorId}
@@ -955,11 +1006,13 @@ function TreeItem(props: TreeItemProps) {
             onCommit={props.onCommitEdit}
             onIdle={() => props.onEditIdle(node.id)}
             onPaste={props.onPasteReplace}
-            onSetFormatting={props.onSetFormatting}
             sourceDraft={props.edit?.sourceDraft ?? ''}
           />
         )}
-        {actions}
+        <span aria-hidden={!active} className="active-controls" inert={!active}>
+          {formattingActions}
+          {actions}
+        </span>
         {node.type === 'primitive' && (
           <span className="sr-only" id={descriptionId}>
             Type: {node.detectedKind}. Value:{' '}
@@ -985,6 +1038,8 @@ function TreeItem(props: TreeItemProps) {
             onDismiss={(restoreFocus) =>
               props.onDismissComposer(node.id, restoreFocus)
             }
+            onRedo={props.onRedo}
+            onUndo={props.onUndo}
             preferredKind={
               props.headerComposerId === node.id ? 'header' : 'primitive'
             }
@@ -1020,11 +1075,13 @@ interface EditableProps {
 function HeaderContent({
   node,
   root,
+  anonymousLabel,
   editing,
   ...editable
 }: EditableProps & {
   readonly node: UiContainerNode
   readonly root: boolean
+  readonly anonymousLabel: string | null
   readonly editing: boolean
 }) {
   if (editing)
@@ -1035,7 +1092,13 @@ function HeaderContent({
         &gt;
       </span>
       <span className={node.caption === null ? 'blank-caption' : undefined}>
-        {root ? '' : node.caption === '' ? '""' : node.caption}
+        {root
+          ? ''
+          : node.caption === null
+            ? anonymousLabel
+            : node.caption === ''
+              ? '""'
+              : node.caption}
       </span>
       <span className="child-count">{node.childIds.length}</span>
     </span>
@@ -1044,25 +1107,19 @@ function HeaderContent({
 
 function PrimitiveContent({
   node,
-  active,
   editing,
   formattingEnabled,
-  onSetFormatting,
   ...editable
 }: EditableProps & {
   readonly node: PrimitiveNode
-  readonly active: boolean
   readonly editing: boolean
   readonly formattingEnabled: boolean
-  readonly onSetFormatting: (id: NodeId, formatting: FormattingOverride) => void
 }) {
   if (editing)
     return (
       <InlineEditor {...editable} ariaLabel="Value source" singleLine={false} />
     )
-  const value = active
-    ? node.sourceInput
-    : formatPrimitive(node, { enabled: formattingEnabled })
+  const value = formatPrimitive(node, { enabled: formattingEnabled })
   return (
     <>
       <span
@@ -1078,25 +1135,6 @@ function PrimitiveContent({
           value
         )}
       </span>
-      {active && (
-        <span
-          aria-label="Value formatting"
-          className="format-controls"
-          onClick={(event) => event.stopPropagation()}
-          role="group"
-        >
-          {(['inherit', 'formatted', 'source'] as const).map((formatting) => (
-            <button
-              aria-pressed={node.formatting === formatting}
-              key={formatting}
-              onClick={() => onSetFormatting(node.id, formatting)}
-              type="button"
-            >
-              {formatting}
-            </button>
-          ))}
-        </span>
-      )}
     </>
   )
 }
@@ -1170,12 +1208,16 @@ function Composer({
   onAddPrimitive,
   onAddHeader,
   onDismiss,
+  onUndo,
+  onRedo,
   preferredKind,
 }: {
   readonly inputRef: (element: HTMLInputElement | null) => void
   readonly onAddPrimitive: (draft: string) => string | null
   readonly onAddHeader: (draft: string, touched: boolean) => string | null
   readonly onDismiss: (restoreFocus: boolean) => void
+  readonly onUndo: () => void
+  readonly onRedo: () => void
   readonly preferredKind: 'primitive' | 'header'
 }) {
   const [composer, setComposer] = useState(EMPTY_COMPOSER)
@@ -1227,7 +1269,15 @@ function Composer({
         }
         onKeyDown={(event) => {
           event.stopPropagation()
-          if (event.key === 'Escape') {
+          if (
+            !composer.touched &&
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === 'z'
+          ) {
+            event.preventDefault()
+            if (event.shiftKey) onRedo()
+            else onUndo()
+          } else if (event.key === 'Escape') {
             event.preventDefault()
             setComposer(EMPTY_COMPOSER)
             onDismiss(true)
@@ -1265,6 +1315,15 @@ function Composer({
         </span>
       )}
     </div>
+  )
+}
+
+function isTextEntry(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
   )
 }
 

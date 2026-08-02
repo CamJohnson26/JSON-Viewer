@@ -293,6 +293,20 @@ textarea {
   justify-content: flex-end;
 }
 
+.active-controls {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  visibility: hidden;
+}
+
+.tree-row.is-active > .active-controls {
+  visibility: visible;
+}
+
 .row-actions button,
 .format-controls button,
 .add-header-action {
@@ -500,9 +514,9 @@ textarea.inline-editor {
     padding-inline: 0.6rem;
   }
 
+  .active-controls,
   .row-actions,
   .format-controls {
-    width: 100%;
     justify-content: flex-start;
   }
 
