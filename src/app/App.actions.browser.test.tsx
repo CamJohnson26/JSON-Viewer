@@ -2,7 +2,12 @@ import { expect, test } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 
-import { materialize } from '../domain/document/index.ts'
+import {
+  materialize,
+  nodeId,
+  parseJson,
+  type JsonDocument,
+} from '../domain/document/index.ts'
 import { createEditorTestStore } from '../test/fixtures/editor.ts'
 import { App } from './App.tsx'
 
@@ -83,6 +88,26 @@ test('opens the shared menu from the keyboard and restores row focus', async () 
   await expect.element(value).toHaveFocus()
 })
 
+test('filters applicable context-menu actions and restores row focus', async () => {
+  const { screen } = await editorWithValues(['  menu  '])
+  const value = screen.getByRole('treeitem', { name: 'string value' })
+  value.element().focus()
+  await userEvent.keyboard('{Shift>}{F10}{/Shift}')
+  const search = screen.getByRole('textbox', {
+    name: 'Search available actions',
+  })
+  await expect.element(search).toHaveFocus()
+  await search.fill('trim')
+  await expect
+    .element(screen.getByRole('menuitem', { name: 'Trim text' }))
+    .toBeVisible()
+  await expect
+    .element(screen.getByRole('menuitem', { name: 'Delete' }))
+    .not.toBeInTheDocument()
+  await userEvent.keyboard('{Escape}')
+  await expect.element(value).toHaveFocus()
+})
+
 test('opens a contextual add row from the menu beneath a value', async () => {
   const { screen, store } = await editorWithValues(['first', 'third'])
   const values = screen.getByRole('treeitem', { name: 'string value' }).all()
@@ -135,6 +160,63 @@ test('keeps parameter dialogs open with an inline error', async () => {
     .element(screen.getByRole('textbox', { name: 'Query JSON' }))
     .toBeVisible()
   expect(materialize(store.getSnapshot().present)).toEqual(['before'])
+})
+
+test('converts selected captions in one undoable action', async () => {
+  const store = createEditorTestStore(
+    parsed('{"First Name":{},"account-status":{}}'),
+  )
+  const screen = await render(<App store={store} />)
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  root.element().focus()
+  await userEvent.keyboard('{ArrowRight}')
+  const first = screen.getByRole('treeitem', { name: 'First Name' })
+  const second = screen.getByRole('treeitem', { name: 'account-status' })
+  await first.click()
+  clickWith(second.element(), { ctrlKey: true })
+  await userEvent.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
+  await screen
+    .getByRole('textbox', { name: 'Search commands' })
+    .fill('caption style')
+  await screen.getByRole('option', { name: 'Change caption style' }).click()
+  await screen.getByRole('combobox', { name: 'Style' }).selectOptions('camel')
+  await screen.getByRole('button', { name: 'Apply' }).click()
+
+  expect(materialize(store.getSnapshot().present)).toEqual({
+    firstName: {},
+    accountStatus: {},
+  })
+  await userEvent.keyboard('{Control>}z{/Control}')
+  expect(materialize(store.getSnapshot().present)).toEqual({
+    'First Name': {},
+    'account-status': {},
+  })
+})
+
+test('expands and collapses a header with all descendants using Alt', async () => {
+  const screen = await render(
+    <App store={createEditorTestStore(parsed('{"outer":{"inner":[]}}'))} />,
+  )
+  const root = screen.getByRole('treeitem', { name: 'Blank document' })
+  root.element().focus()
+  await userEvent.keyboard('{ArrowRight}')
+  const outer = screen.getByRole('treeitem', { name: 'outer' })
+  outer.element().focus()
+  await userEvent.keyboard('{Alt>}{ArrowRight}{/Alt}')
+  const inner = screen.getByRole('treeitem', { name: 'inner' })
+  await expect.element(outer).toHaveAttribute('aria-expanded', 'true')
+  await expect.element(inner).toHaveAttribute('aria-expanded', 'true')
+
+  outer.element().focus()
+  await userEvent.keyboard('{Alt>}{ArrowLeft}{/Alt}')
+  await expect.element(outer).toHaveAttribute('aria-expanded', 'false')
+  await expect.element(inner).not.toBeInTheDocument()
+  await expect.element(outer).toHaveFocus()
+
+  clickWith(outer.element(), { altKey: true })
+  await expect
+    .element(screen.getByRole('treeitem', { name: 'inner' }))
+    .toHaveAttribute('aria-expanded', 'true')
 })
 
 test('runs add-header as a header workflow', async () => {
@@ -214,9 +296,20 @@ test('keeps roving focus visible when collapsing all headers', async () => {
 
 function clickWith(
   element: Element,
-  modifiers: { readonly ctrlKey?: boolean; readonly shiftKey?: boolean },
+  modifiers: {
+    readonly altKey?: boolean
+    readonly ctrlKey?: boolean
+    readonly shiftKey?: boolean
+  },
 ): void {
   element
     .querySelector<HTMLElement>('.tree-row')
     ?.dispatchEvent(new MouseEvent('click', { bubbles: true, ...modifiers }))
+}
+
+function parsed(source: string): JsonDocument {
+  let id = 0
+  const result = parseJson(source, {}, () => nodeId(`fixture-${id++}`))
+  if (!result.ok) throw new Error(result.error.message)
+  return result.document
 }

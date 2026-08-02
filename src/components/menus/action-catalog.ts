@@ -131,6 +131,18 @@ const simpleOperations: readonly EditorAction[] = [
 const ACTIONS: readonly EditorAction[] = [
   { id: 'copy', label: 'Copy', keywords: 'clipboard', kind: 'clipboard' },
   {
+    id: 'copy.captions',
+    label: 'Copy all captions',
+    keywords: 'clipboard names',
+    kind: 'clipboard',
+  },
+  {
+    id: 'copy.values',
+    label: 'Copy all values',
+    keywords: 'clipboard contents',
+    kind: 'clipboard',
+  },
+  {
     id: 'paste',
     label: 'Paste',
     keywords: 'clipboard automatic',
@@ -189,6 +201,16 @@ const ACTIONS: readonly EditorAction[] = [
     'reparent path position',
     () => ({ type: 'structure.move-to', containerId: '' as never, index: 0 }),
     [text('path', 'Destination path'), number('index', 'Position', '0')],
+  ),
+  operation(
+    'caption.case',
+    'Change caption style',
+    'caption snake camel words naming',
+    (v) => ({
+      type: 'caption.case',
+      mode: value(v, 'mode') as 'snake',
+    }),
+    [select('mode', 'Style', ['snake', 'camel', 'words'])],
   ),
   operation(
     'text.case',

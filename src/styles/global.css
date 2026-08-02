@@ -262,7 +262,7 @@ textarea {
   min-width: 0;
   flex: 1 1 auto;
   gap: 0.55rem;
-  align-items: baseline;
+  align-items: center;
   font-weight: var(--font-weight-emphasis);
 }
 
@@ -309,6 +309,7 @@ textarea {
 }
 
 .child-count {
+  align-self: center;
   border-radius: 1rem;
   padding-inline: 0.42rem;
   color: var(--color-text-muted);
@@ -375,8 +376,10 @@ textarea {
 
 .active-controls {
   display: flex;
-  min-width: 0;
-  flex: 0 1 auto;
+  width: min(28rem, 100%);
+  min-width: min(18rem, 100%);
+  max-width: 100%;
+  flex: 0 1 28rem;
   flex-wrap: wrap;
   gap: 0.25rem;
   justify-content: flex-end;
@@ -390,8 +393,10 @@ textarea {
 .row-actions button,
 .format-controls button,
 .add-header-action {
+  flex: 0 0 auto;
   border-color: transparent;
   font-size: var(--text-status);
+  white-space: nowrap;
 }
 
 .format-controls button[aria-pressed='true'] {
@@ -503,6 +508,26 @@ textarea.inline-editor {
   background: var(--color-focus);
 }
 
+.context-menu-search {
+  position: sticky;
+  z-index: 1;
+  top: -0.3rem;
+  margin: -0.3rem -0.3rem 0.3rem;
+  padding: 0.3rem;
+  background: var(--color-surface-raised);
+}
+
+.context-menu-search input {
+  width: 100%;
+  padding: 0.38rem 0.5rem;
+}
+
+.context-menu-empty {
+  margin: 0;
+  padding: 0.5rem;
+  color: var(--color-text-muted);
+}
+
 .dialog-backdrop {
   position: fixed;
   z-index: 30;
@@ -597,6 +622,10 @@ textarea.inline-editor {
   .active-controls,
   .row-actions,
   .format-controls {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-basis: 100%;
     justify-content: flex-start;
   }
 

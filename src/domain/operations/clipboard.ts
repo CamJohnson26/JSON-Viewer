@@ -27,6 +27,12 @@ export type ClipboardResult =
     }
   | { readonly ok: false; readonly error: OperationError }
 
+export type BulkClipboardPart = 'captions' | 'values'
+
+export type BulkClipboardResult =
+  | { readonly ok: true; readonly value: JsonValue; readonly text: string }
+  | { readonly ok: false; readonly error: OperationError }
+
 export function serializeSelection(
   document: JsonDocument,
   selectedIds: readonly NodeId[],
@@ -65,6 +71,32 @@ export function serializeSelection(
     value,
     text: keyedText ?? JSON.stringify(value, null, space),
   }
+}
+
+export function serializeObjectParts(
+  document: JsonDocument,
+  selectedIds: readonly NodeId[],
+  part: BulkClipboardPart,
+  space?: number,
+): BulkClipboardResult {
+  const checked = validateSelection(document, selectedIds)
+  if (!checked.ok) return checked
+  const values: JsonValue[] = []
+  for (const id of checked.ids) {
+    const node = document.nodes[id]
+    if (node?.type !== 'container' || node.kind !== 'object')
+      return failed(
+        'IncompatibleSelection',
+        'Bulk copy requires object headers',
+        id,
+      )
+    for (const entry of node.entries)
+      values.push(
+        part === 'captions' ? entry.key : nodePayload(document, entry.nodeId),
+      )
+  }
+  const width = Math.min(10, Math.max(0, Math.trunc(space ?? 0)))
+  return { ok: true, value: values, text: JSON.stringify(values, null, width) }
 }
 
 function serializeKeyedFragment(

@@ -42,6 +42,7 @@ npm run preview
 - `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` undo and redo document changes.
 - `Ctrl/Cmd+Shift+P` opens the command palette.
 - Right click or `Shift+F10` opens applicable row actions.
+- `Alt+ArrowRight`/`Alt+ArrowLeft` expands or collapses a header and all descendants; `Alt+Space` or Alt-click toggles them together.
 
 The interface derives object/array presentation, generated row references, and formatting without adding editor metadata to exported JSON.
 

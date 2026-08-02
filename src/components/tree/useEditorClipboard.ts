@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 
 import type { JsonDocument, NodeId } from '../../domain/document/index.ts'
-import { serializeSelection } from '../../domain/operations/index.ts'
+import {
+  serializeObjectParts,
+  serializeSelection,
+  type BulkClipboardPart,
+} from '../../domain/operations/index.ts'
 import {
   readClipboardText,
   writeClipboardText,
@@ -16,6 +20,7 @@ export interface EditorClipboard {
   readonly copy: () => Promise<string | null>
   readonly paste: (mode?: PasteMode) => Promise<string | null>
   readonly pasteText: (source: string, mode?: PasteMode) => string | null
+  readonly copyParts: (part: BulkClipboardPart) => Promise<string | null>
 }
 
 export function useEditorClipboard({
@@ -134,6 +139,30 @@ export function useEditorClipboard({
       }
     },
     pasteText: (source, mode = 'automatic') => applyPaste(source, mode),
+    copyParts: async (part) => {
+      const result = serializeObjectParts(
+        document,
+        selectValidRoots(document, selectedIds),
+        part,
+        2,
+      )
+      if (!result.ok) {
+        const message = presentEditorMessage(result.error.message)
+        onStatus(message)
+        return message
+      }
+      try {
+        await writeClipboardText(result.text)
+        onStatus(
+          part === 'captions' ? 'Copied all captions' : 'Copied all values',
+        )
+        return null
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Copy failed'
+        onStatus(message)
+        return message
+      }
+    },
   }
 }
 

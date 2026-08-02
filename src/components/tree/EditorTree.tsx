@@ -22,6 +22,7 @@ import {
 import type { EventTransaction } from '../../domain/events/index.ts'
 import {
   editorInteractionMachine,
+  descendantContainerIds,
   presentEditorMessage,
   selectActiveNodeId,
   selectEditSession,
@@ -214,8 +215,25 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     expectedRevision: store.getSnapshot().revision,
   })
 
-  const toggleContainer = (id: NodeId): void => {
-    send({ type: 'expansion.toggle', containerId: id })
+  const setExpandedIds = (ids: readonly NodeId[], value: boolean): void => {
+    ids.forEach((containerId) =>
+      send({ type: 'expansion.set', containerId, expanded: value }),
+    )
+  }
+
+  const setHeaderExpansion = (
+    id: NodeId,
+    value: boolean,
+    includeDescendants: boolean,
+  ): void => {
+    setExpandedIds(
+      includeDescendants ? descendantContainerIds(document, [id], true) : [id],
+      value,
+    )
+  }
+
+  const toggleContainer = (id: NodeId, includeDescendants = false): void => {
+    setHeaderExpansion(id, !expanded.has(id), includeDescendants)
   }
 
   const addPrimitive = (
@@ -546,16 +564,28 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
         break
       case 'ArrowRight':
         stop()
-        if (node.type === 'container' && !expanded.has(id))
-          send({ type: 'expansion.set', containerId: id, expanded: true })
+        if (
+          node.type === 'container' &&
+          event.altKey &&
+          !event.getModifierState('AltGraph')
+        )
+          setHeaderExpansion(id, true, true)
+        else if (node.type === 'container' && !expanded.has(id))
+          setHeaderExpansion(id, true, false)
         else if (node.type === 'container' && node.childIds[0])
           focusOnly(node.childIds[0])
         else if (node.type === 'container') openInsert(id)
         break
       case 'ArrowLeft': {
         stop()
-        if (node.type === 'container' && expanded.has(id))
-          send({ type: 'expansion.set', containerId: id, expanded: false })
+        if (
+          node.type === 'container' &&
+          event.altKey &&
+          !event.getModifierState('AltGraph')
+        )
+          setHeaderExpansion(id, false, true)
+        else if (node.type === 'container' && expanded.has(id))
+          setHeaderExpansion(id, false, false)
         else {
           const parentId = selectParent(document, id)?.parentId
           if (parentId) focusOnly(parentId)
@@ -568,7 +598,10 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
           toggleSelection(id)
         } else if (node.type === 'container') {
           stop()
-          send({ type: 'expansion.toggle', containerId: id })
+          toggleContainer(
+            id,
+            event.altKey && !event.getModifierState('AltGraph'),
+          )
         }
         break
       case 'Enter':
@@ -647,8 +680,10 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     }
     focusNode(id)
     onStatus('1 selected')
-    if (document.nodes[id]?.type === 'container' && edit?.targetId !== id)
-      toggleContainer(id)
+    if (document.nodes[id]?.type === 'container' && edit?.targetId !== id) {
+      if (event.altKey) event.preventDefault()
+      toggleContainer(id, event.altKey && !event.ctrlKey && !event.shiftKey)
+    }
   }
 
   const toggleSelection = (id: NodeId): void => {
@@ -680,10 +715,7 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
     activeId,
     clipboard,
     setSelection,
-    setExpanded: (ids, value) =>
-      ids.forEach((containerId) =>
-        send({ type: 'expansion.set', containerId, expanded: value }),
-      ),
+    setExpanded: setExpandedIds,
     focus: focusOnly,
     onStatus,
     uiCommand: (id, targetId) => {
@@ -788,7 +820,6 @@ export function EditorTree({ store, onStatus }: EditorTreeProps) {
             onNavigate={navigate}
             onRedo={redo}
             onSetFormatting={setFormatting}
-            onToggle={toggleContainer}
             onUndo={undo}
             onUnwrap={(id) => mutate('header.unwrap', id, 'Header unwrapped')}
             onDismissComposer={dismissComposer}
@@ -834,7 +865,6 @@ interface TreeItemProps {
   readonly onFocus: (id: NodeId) => void
   readonly onSelect: (id: NodeId, event: MouseEvent<HTMLElement>) => void
   readonly onEditIdle: (id: NodeId) => void
-  readonly onToggle: (id: NodeId) => void
   readonly onNavigate: (event: KeyboardEvent<HTMLElement>, id: NodeId) => void
   readonly onUndo: () => void
   readonly onRedo: () => void
@@ -1075,6 +1105,11 @@ function TreeItem(props: TreeItemProps) {
             onIdle={() => props.onEditIdle(node.id)}
             root={node.id === props.document.rootId}
             preview={preview}
+            previewKind={
+              previewNode?.type === 'primitive'
+                ? previewNode.detectedKind
+                : null
+            }
             sourceDraft={props.edit?.sourceDraft ?? ''}
           />
         ) : (
@@ -1168,6 +1203,7 @@ function HeaderContent({
   root,
   anonymousLabel,
   preview,
+  previewKind,
   editing,
   ...editable
 }: EditableProps & {
@@ -1175,6 +1211,7 @@ function HeaderContent({
   readonly root: boolean
   readonly anonymousLabel: string | null
   readonly preview: string | null
+  readonly previewKind: PrimitiveNode['detectedKind'] | null
   readonly editing: boolean
 }) {
   return (
@@ -1192,7 +1229,11 @@ function HeaderContent({
                 ? '""'
                 : node.caption}
           {preview !== null && (
-            <span className="collapsed-preview">: {preview}</span>
+            <span
+              className={`collapsed-preview value-${previewKind ?? 'string'}`}
+            >
+              : {preview}
+            </span>
           )}
         </span>
       )}

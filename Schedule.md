@@ -250,6 +250,7 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
     **Log (append-only):**
     - 2026-08-01: Added from product feedback about unclear parentage and opaque collapsed headers.
     - 2026-08-01: Added formatted collapsed previews for captioned singleton primitive headers, full generated ancestry references, accessible descriptions, and narrow-width coverage without duplicating expanded or non-scalar content.
+    - 2026-08-01: Collapsed primitive previews now reuse the child value's semantic string, number, boolean, null, date, or datetime color class while retaining source-preserving formatting and neutral row backgrounds.
 
 49. **[DONE] Add generated hierarchical row references**
     **Acceptance:** Every rendered document row has a deterministic left-side reference. Children of keyed parents use spreadsheet letters, children of ordered parents use one-based numbers, and segments compose as `A.1.B`; root uses `Root`. References update after structural changes, are not persisted or copied as JSON, and remain accessible at narrow widths.
@@ -270,20 +271,26 @@ The schedule implements `JSON-Viewer-Plan.md`. A task is not `DONE` when code me
     - 2026-08-01: Added as urgent product direction for the existing `CamJohnson26/JSON-Viewer` remote; no custom domain is assumed.
     - 2026-08-01: Added environment-gated `/JSON-Viewer/` Vite assets, a least-privilege `master`/manual Pages workflow, and README setup/deploy/private-repository guidance. Verified the Pages build emits project-site asset URLs while local builds and Chrome tests retain root-base behavior.
 
-52. **[TODO] Add context-menu search**
+52. **[DONE] Add context-menu search**
     **Acceptance:** The keyboard and pointer context menu can filter its currently applicable actions without losing menu semantics, focus restoration, disabled-state explanations, or command-palette parity.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback and placed before further I/O work because the action catalog is already large.
+    - 2026-08-01: Selected as the first item in the next cohesive utility/discovery batch with items 53-54.
+    - 2026-08-01: Added focused filtering over applicable shared-catalog actions with empty results, keyboard and pointer support, focus restoration, palette shortcut propagation, and Chrome regression coverage.
 
-53. **[TODO] Add key naming and bulk-copy utilities**
+53. **[DONE] Add key naming and bulk-copy utilities**
     **Acceptance:** Selected captions can convert predictably among snake case, camel case, and spaced words with collision detection and one undoable transaction. Copy-all-captions and copy-all-values produce deterministic valid JSON without mutating the document.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback; UI terminology uses captions rather than object/key model jargon.
+    - 2026-08-01: Selected for the next batch after context-menu search so new transformations and copy actions share the improved discovery surface.
+    - 2026-08-01: Added atomic snake/camel/spaced caption conversion with collision detection plus deterministic copy-all-captions and copy-all-values JSON actions. Domain and Chrome tests cover non-mutation and one-step undo.
 
-54. **[TODO] Add modifier-based bulk expansion**
+54. **[DONE] Add modifier-based bulk expansion**
     **Acceptance:** Holding the approved Option/Alt modifier while expanding or collapsing applies the same state to descendants, does not trigger browser navigation, preserves visible roving focus, and is documented and tested on the supported Chrome target.
     **Log (append-only):**
     - 2026-08-01: Added from product feedback; exact browser-safe event handling remains an implementation concern.
+    - 2026-08-01: Selected to complete the next batch as a focused keyboard/navigation improvement before file and URL work.
+    - 2026-08-01: Added browser-safe Alt/Option descendant expansion and collapse for arrows, Space, and pointer activation, preserving focus and excluding AltGraph. Documented the shortcuts and verified the complete batch with 192 Vitest tests, 5 Chrome E2E tests, and local plus Pages builds.
 
 55. **[TODO] Implement graphical JSON file import and export**
     **Acceptance:** Strict JSON files can populate the graphical editor, and current canonical JSON can download as a file. There is no raw JSON editing surface; errors never replace the current document.

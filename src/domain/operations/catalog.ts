@@ -15,6 +15,7 @@ export const JSON_OPERATION_CATALOG: readonly OperationDescriptor[] = [
   ['structure.flatten', 'Flatten collections', 'operation'],
   ['structure.remove-empty', 'Remove empty values', 'operation'],
   ['structure.remove', 'Remove selection', 'operation'],
+  ['caption.case', 'Change caption style', 'operation'],
   ['text.case', 'Change case', 'operation'],
   ['text.trim', 'Trim', 'operation'],
   ['text.replace', 'Find and replace', 'operation'],

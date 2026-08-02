@@ -4,6 +4,7 @@ import {
   type ReactNode,
   useDeferredValue,
   useEffect,
+  useRef,
   useState,
 } from 'react'
 
@@ -28,6 +29,8 @@ export function EditorActionSurface({
 }: EditorActionSurfaceProps) {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [contextQuery, setContextQuery] = useState('')
+  const contextSearchRef = useRef<HTMLInputElement>(null)
   const deferredQuery = useDeferredValue(query.trim().toLowerCase())
   const [parameterAction, setParameterAction] = useState<EditorAction | null>(
     null,
@@ -35,9 +38,17 @@ export function EditorActionSurface({
   const [parameterError, setParameterError] = useState<string | null>(null)
   const queryTerms = deferredQuery.split(/\s+/).filter(Boolean)
   const filtered = EDITOR_ACTION_CATALOG.filter((action) => {
-    const searchable = `${action.label} ${action.keywords}`.toLowerCase()
-    return queryTerms.every((term) => searchable.includes(term))
+    return matchesAction(action, queryTerms)
   })
+  const contextTerms = contextQuery
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+  const contextActions = EDITOR_ACTION_CATALOG.filter(
+    (action) =>
+      disabledReason(action) === null && matchesAction(action, contextTerms),
+  )
 
   useEffect(() => {
     const open = (event: KeyboardEvent): void => {
@@ -65,7 +76,14 @@ export function EditorActionSurface({
 
   return (
     <>
-      <ContextMenu.Root>
+      <ContextMenu.Root
+        onOpenChange={(open) => {
+          if (open) setContextQuery('')
+        }}
+        onOpenChangeComplete={(open) => {
+          if (open) contextSearchRef.current?.focus()
+        }}
+      >
         <ContextMenu.Trigger
           className="context-trigger"
           onContextMenuCapture={(event) => {
@@ -80,18 +98,47 @@ export function EditorActionSurface({
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Positioner className="menu-positioner">
-            <ContextMenu.Popup className="action-menu" finalFocus>
-              {EDITOR_ACTION_CATALOG.filter(
-                (action) => disabledReason(action) === null,
-              ).map((action) => (
+            <ContextMenu.Popup
+              aria-label="Editor actions"
+              className="action-menu"
+              finalFocus
+            >
+              <div className="context-menu-search" role="none">
+                <input
+                  aria-label="Search available actions"
+                  onChange={(event) =>
+                    setContextQuery(event.currentTarget.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (
+                      !event.ctrlKey &&
+                      !event.metaKey &&
+                      event.key !== 'Escape' &&
+                      event.key !== 'ArrowDown' &&
+                      event.key !== 'ArrowUp'
+                    )
+                      event.stopPropagation()
+                  }}
+                  placeholder="Search actions"
+                  ref={contextSearchRef}
+                  value={contextQuery}
+                />
+              </div>
+              {contextActions.map((action) => (
                 <ContextMenu.Item
                   className="action-menu-item"
                   key={action.id}
+                  label={action.label}
                   onClick={() => invoke(action)}
                 >
                   {action.label}
                 </ContextMenu.Item>
               ))}
+              {contextActions.length === 0 && (
+                <p className="context-menu-empty" role="status">
+                  No matching available actions
+                </p>
+              )}
             </ContextMenu.Popup>
           </ContextMenu.Positioner>
         </ContextMenu.Portal>
@@ -162,6 +209,14 @@ export function EditorActionSurface({
       />
     </>
   )
+}
+
+function matchesAction(
+  action: EditorAction,
+  terms: readonly string[],
+): boolean {
+  const searchable = `${action.label} ${action.keywords}`.toLowerCase()
+  return terms.every((term) => searchable.includes(term))
 }
 
 function ParameterDialog({

@@ -157,6 +157,8 @@ function execute(
       return removeEmpty(document, selectedIds)
     case 'structure.remove':
       return removeSelection(document, selectedIds)
+    case 'caption.case':
+      return transformCaptions(document, selectedIds, operation.mode)
     case 'text.case':
       return updateStrings(document, selectedIds, (value) =>
         operation.mode === 'upper'
@@ -826,6 +828,87 @@ function renamePaths(
     affected.push(parent.id, child.id)
   }
   return changed(document, updates, ids, affected)
+}
+
+function transformCaptions(
+  document: JsonDocument,
+  ids: readonly NodeId[],
+  mode: 'snake' | 'camel' | 'words',
+): Applied {
+  const parents = buildParentLookup(document)
+  const proposals = new Map<NodeId, string>()
+  const parentIds = new Set<NodeId>()
+  for (const id of ids) {
+    const node = document.nodes[id]
+    if (
+      node?.type !== 'container' ||
+      node.caption === null ||
+      id === document.rootId
+    )
+      incompatible(id, 'Caption styling requires named header selections')
+    proposals.set(id, captionCase(node.caption, mode))
+    const parentId = parents.get(id)?.parentId
+    if (!parentId) incompatible(id, 'Captioned header has no parent')
+    if (document.nodes[parentId]?.type === 'container') parentIds.add(parentId)
+  }
+
+  for (const parentId of parentIds) {
+    const parent = document.nodes[parentId]
+    if (parent?.type !== 'container' || parent.kind !== 'object') continue
+    const captions = new Set<string>()
+    for (const childId of parent.childIds) {
+      const child = document.nodes[childId]
+      if (child?.type !== 'container' || child.caption === null)
+        fail(
+          'InvariantViolation',
+          'Object entry does not reference a named header',
+          parentId,
+        )
+      const caption = proposals.get(childId) ?? child.caption
+      if (captions.has(caption))
+        fail(
+          'DuplicateCaption',
+          `Duplicate caption after conversion: ${caption}`,
+          parentId,
+        )
+      captions.add(caption)
+    }
+  }
+
+  const updates = Object.create(null) as Record<string, DocumentNode>
+  proposals.forEach((caption, id) => {
+    const node = document.nodes[id] as ContainerNode
+    defineRecord(updates, id, { ...node, caption })
+  })
+  for (const parentId of parentIds) {
+    const parent = document.nodes[parentId]
+    if (parent?.type !== 'container' || parent.kind !== 'object') continue
+    defineRecord(updates, parentId, {
+      ...parent,
+      entries: parent.entries.map((entry) => ({
+        ...entry,
+        key: proposals.get(entry.nodeId) ?? entry.key,
+      })),
+    })
+  }
+  return changed(document, updates, ids, [...ids, ...parentIds])
+}
+
+function captionCase(value: string, mode: 'snake' | 'camel' | 'words'): string {
+  const tokens = value
+    .replace(/(\p{Lu}+)(\p{Lu}\p{Ll})/gu, '$1 $2')
+    .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2')
+    .replace(/(\p{L})(\p{N})|(\p{N})(\p{L})/gu, '$1$3 $2$4')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .map((token) => token.toLowerCase())
+  if (mode === 'snake') return tokens.join('_')
+  if (mode === 'words') return tokens.join(' ')
+  return tokens
+    .map((token, index) =>
+      index === 0 ? token : token.charAt(0).toUpperCase() + token.slice(1),
+    )
+    .join('')
 }
 
 function resolvePathNode(

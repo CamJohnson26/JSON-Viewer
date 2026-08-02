@@ -50,6 +50,8 @@ export function validateOperationPayload(
       return null
     case 'text.case':
       return enumField('mode', ['upper', 'lower', 'title'])
+    case 'caption.case':
+      return enumField('mode', ['snake', 'camel', 'words'])
     case 'text.replace':
       return typeof value.find === 'string' &&
         typeof value.replacement === 'string' &&

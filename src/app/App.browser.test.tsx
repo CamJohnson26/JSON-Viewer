@@ -142,6 +142,9 @@ test('previews a singleton value only while its header is collapsed', async () =
     .querySelector<HTMLElement>(':scope > .header-row')
   expect(previewRow?.dataset.headerKind).toBeUndefined()
   expect(previewRow).toHaveClass('has-primitive-preview')
+  expect(previewRow?.querySelector('.collapsed-preview')).toHaveClass(
+    'value-number',
+  )
   await expect
     .element(header)
     .toHaveAccessibleDescription(/Collapsed value: 42/)

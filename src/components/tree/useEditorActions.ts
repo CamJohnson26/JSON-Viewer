@@ -98,6 +98,10 @@ export function useEditorActions(options: ActionsOptions) {
         return null
       }
       if (action.id === 'copy') return options.clipboard.copy()
+      if (action.id === 'copy.captions')
+        return options.clipboard.copyParts('captions')
+      if (action.id === 'copy.values')
+        return options.clipboard.copyParts('values')
       if (action.id === 'paste') return options.clipboard.paste()
       if (action.id === 'paste.into') return options.clipboard.paste('into')
       if (action.id === 'paste.beside') return options.clipboard.paste('beside')
@@ -225,8 +229,25 @@ export function useEditorActions(options: ActionsOptions) {
     if (action.id === 'data.merge' && roots.length < 2)
       return 'Select at least two items'
     if (action.id === 'data.merge' && !objects) return 'Choose named headers'
+    if (
+      (action.id === 'copy.captions' || action.id === 'copy.values') &&
+      !nodes.every(
+        (node) => node.type === 'container' && node.kind === 'object',
+      )
+    )
+      return 'Choose object headers'
     if (action.id === 'data.extract' && !objects) return 'Choose named headers'
     if (action.id === 'data.rename-path' && !objects)
+      return 'Choose named headers'
+    if (
+      action.id === 'caption.case' &&
+      !nodes.every(
+        (node) =>
+          node.type === 'container' &&
+          node.id !== options.document.rootId &&
+          node.caption !== null,
+      )
+    )
       return 'Choose named headers'
     if (action.id === 'collection.group' && !arrays)
       return 'Choose ordered values'

@@ -49,6 +49,31 @@ test('remains usable at 240 CSS pixels without horizontal overflow', async ({
     '({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth })',
   )
   expect(widths.scroll).toBe(widths.client)
+  const controls = page
+    .getByRole('treeitem', { name: 'string value' })
+    .locator('.active-controls')
+  const controlsBox = await controls.boundingBox()
+  expect(controlsBox).not.toBeNull()
+  expect((controlsBox?.x ?? 0) + (controlsBox?.width ?? 0)).toBeLessThanOrEqual(
+    widths.client,
+  )
+  for (const button of await controls.getByRole('button').all()) {
+    const box = await button.boundingBox()
+    expect(box?.width ?? 0).toBeGreaterThan(20)
+    expect(
+      await button.evaluate(
+        (element) =>
+          (element as unknown as { readonly scrollHeight: number })
+            .scrollHeight,
+      ),
+    ).toBe(
+      await button.evaluate(
+        (element) =>
+          (element as unknown as { readonly clientHeight: number })
+            .clientHeight,
+      ),
+    )
+  }
 })
 
 test('completes a selection clipboard menu and palette workflow', async ({

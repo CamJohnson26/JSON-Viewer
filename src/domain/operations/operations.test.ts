@@ -18,6 +18,7 @@ import {
   JSON_OPERATION_VERSION,
   applyJsonOperation,
   findMatchingIds,
+  serializeObjectParts,
   serializeSelection,
   type JsonOperation,
   type JsonOperationInput,
@@ -161,6 +162,35 @@ describe('contextual clipboard serialization', () => {
     expect(serializeSelection(document, [grandchild, child])).toMatchObject({
       ok: false,
       error: { code: 'OverlappingSelection', nodeId: grandchild },
+    })
+  })
+
+  test('copies direct object captions and values as deterministic JSON arrays', () => {
+    const document = parse('{"outer":{"firstName":1,"details":{"x":2}}}')
+    const outer = rootChildren(document)[0] as NodeId
+    const before = serialize(document)
+
+    expect(
+      serializeObjectParts(document, [outer], 'captions', 2),
+    ).toMatchObject({
+      ok: true,
+      value: ['firstName', 'details'],
+      text: '[\n  "firstName",\n  "details"\n]',
+    })
+    expect(serializeObjectParts(document, [outer], 'values')).toMatchObject({
+      ok: true,
+      value: [1, { x: 2 }],
+      text: '[1,{"x":2}]',
+    })
+    expect(serialize(document)).toBe(before)
+  })
+
+  test('rejects bulk copying from non-object selections', () => {
+    const document = parse('[[1]]')
+    const array = rootChildren(document)[0] as NodeId
+    expect(serializeObjectParts(document, [array], 'values')).toMatchObject({
+      ok: false,
+      error: { code: 'IncompatibleSelection', nodeId: array },
     })
   })
 })
@@ -641,6 +671,41 @@ describe('merge, diff, extraction, rename, and query', () => {
       matchingHeader,
       getContainer(document, matchingHeader).childIds[0],
     ])
+    expect(serialize(document)).toBe(before)
+  })
+
+  test('converts selected captions together while preserving values and order', () => {
+    const document = parse(
+      '{"First Name":{"x":1},"account-status":{"y":2},"untouched":3}',
+    )
+    const [first, status] = rootChildren(document) as [NodeId, NodeId]
+    const converted = apply(document, [first, status], {
+      type: 'caption.case',
+      mode: 'camel',
+    })
+    expect(materialize(converted)).toEqual({
+      firstName: { x: 1 },
+      accountStatus: { y: 2 },
+      untouched: 3,
+    })
+    expect(converted.nodes[rootChildren(document)[2] as NodeId]).toBe(
+      document.nodes[rootChildren(document)[2] as NodeId],
+    )
+  })
+
+  test('rejects caption conversion collisions without mutating the document', () => {
+    const document = parse('{"first-name":{},"first_name":{}}')
+    const before = serialize(document)
+    const result = applyJsonOperation(
+      document,
+      rootChildren(document),
+      op({ type: 'caption.case', mode: 'camel' }),
+      dependencies(),
+    )
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'DuplicateCaption' },
+    })
     expect(serialize(document)).toBe(before)
   })
 

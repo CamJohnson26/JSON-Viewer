@@ -58,6 +58,10 @@ export type JsonOperation =
   | (OperationBase & { readonly type: 'structure.remove-empty' })
   | (OperationBase & { readonly type: 'structure.remove' })
   | (OperationBase & {
+      readonly type: 'caption.case'
+      readonly mode: 'snake' | 'camel' | 'words'
+    })
+  | (OperationBase & {
       readonly type: 'text.case'
       readonly mode: 'upper' | 'lower' | 'title'
     })
